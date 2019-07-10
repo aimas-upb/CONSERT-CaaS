@@ -50,27 +50,30 @@ class ThingWrapper(webthing.Thing):
                      Value(False))
         )  # TODO check to inintial value using check_availability (see services)
 
-        AvailabilityService.listen_avilability(self, self.client)  # TODO remove comment when done (find solution to avoid conflict with clients)
+        #availabilityService = AvailabilityService(self.client)
+        #availabilityService.listen_availability(self)
 
-        # TODO finish thing_wrapper init
-
+    """
     def set_availability(self, request, response):
         state = request['data']
         self.set_property('available', state)
         response['success'] = True
         print(self.name + " availabilty set to: {}".format(request['data']))
         return True
+     """
+    def set_availability(self, state):
+        self.set_property('available', state)
+        print("Setting " + self.name + " to".format(state))
 
-    # TODO try in testing main to add and use multiple different actions
     def add_available_action(self, name, metadata, cls=None):
-        """overwritten add_available_action method for hardcoding the class used ('cls') ,
-            since it is always the same, but with different params
-         """
 
-        talker = roslibpy.Topic(self.client, metadata['topic'], metadata['message_type'])
-        self.talkers[name] = talker
+        if cls:
+            super(ThingWrapper, self).add_available_action(name, metadata, cls)
+        else:
+            talker = roslibpy.Topic(self.client, metadata['topic'], metadata['message_type'])
+            self.talkers[name] = talker
 
-        super(ThingWrapper, self).add_available_action(name, metadata, PerformROSAction)
+            super(ThingWrapper, self).add_available_action(name, metadata, PerformROSAction)
 
     def perform_action(self, action_name, input_=None):
         if action_name not in self.available_actions:
@@ -83,12 +86,16 @@ class ThingWrapper(webthing.Thing):
                 validate(input_, action_type['metadata']['input'])
             except ValidationError:
                 return None
+        if isinstance(action_type['class'], PerformROSAction):
 
-        action = action_type['class'](self, action_name, input_=input_)
-        action.set_href_prefix(self.href_prefix)
-        self.action_notify(action)
-        self.actions[action_name].append(action)
-        return action
+            action = action_type['class'](self, action_name, input_=input_)
+            action.set_href_prefix(self.href_prefix)
+            self.action_notify(action)
+            self.actions[action_name].append(action)
+            return action
+        else:
+            action = super(ThingWrapper, self).perform_action(action_name, input_)
+            return action
 
 
 ####################
