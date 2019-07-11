@@ -2,27 +2,29 @@ import roslibpy
 import threading
 import time
 
+
 class AvailabilityService:
+    def __init__(self, thing):
+        self.thing = thing
 
-    @staticmethod
-    def check_availability(host, port):
-        #TODO implementation
-        print("Checking availability")
+    def check_availability(self):
+        raise NotImplementedError
 
-    @staticmethod
-    def listen_avilability(thing, client):
+    def listen_availability(self):
+        """
+        service = roslibpy.Service(self.client, '/set_ludicrous_speed', 'std_srvs/SetBool')
+        request = roslibpy.ServiceRequest({'data': True})
 
-        #TODO change service name to something relevant
-        service = roslibpy.Service(client, '/set_ludicrous_speed', 'std_srvs/SetBool')
-
-        service.advertise(thing.set_availability)
-
-        x = threading.Thread(target=client.run())
-        x.start()
-        print("Sarted listening availability for: " + thing.name)
+        print('Calling service...')
+        result = service.call(request)
+        print('Service response: {}'.format(result))
+        """
+        raise NotImplementedError
 
 
 class ActuationService:
-    @staticmethod
-    def ros_actuation(thing, talker, data):
-        talker.publish(roslibpy.Message({'data': data}))
+    def __init__(self, thing):
+        self.thing = thing
+
+    def ros_actuation(self, payload):
+        raise NotImplementedError

@@ -1,15 +1,18 @@
 from __future__ import division
 
+import uuid
+
 import roslibpy
 from webthing.server import ActionsHandler, ThingsHandler, ThingHandler, PropertiesHandler, PropertyHandler, \
     ActionHandler, ActionIDHandler, EventsHandler, EventHandler
-from webthing import (Property, MultipleThings, Thing, Value)
+from webthing import (Property, MultipleThings, Thing, Value, Action)
 
 import logging
 import json
 
 from zeroconf import ServiceInfo, Zeroconf
 
+from services import ActuationService, AvailabilityService
 from thingwrapper import ThingWrapper
 import tornado.concurrent
 import tornado.gen
@@ -20,8 +23,9 @@ import tornado.websocket
 import socket
 from webthing.utils import get_addresses, get_ip
 
-href_counter = 0
+href_counter = 0  #TODO find solution to remove counter
 
+#TODO add if_available service on perform_action
 
 class ExtendedThingsHandler(ThingsHandler):
 
@@ -121,14 +125,7 @@ class ExtendedThingsHandler(ThingsHandler):
         # TODO decode Events
 
 
-class MultipleThingsTEST(MultipleThings):
-    def __init__(self, things, name, client):
-        super(MultipleThingsTEST, self).__init__(things, name)
-        self.client = client
-
-
 class SensorNode:
-    #TODO inlaturare pasi inutili
     def __init__(self, things, ros_client, port=80, hostname=None, ssl_options=None,
                  additional_routes=None):
         """
@@ -229,8 +226,6 @@ class SensorNode:
         self.server = tornado.httpserver.HTTPServer(self.app,
                                                     ssl_options=ssl_options)
 
-
-
     def start(self):
         """Start listening for incoming connections."""
         self.service_info = ServiceInfo(
@@ -255,9 +250,221 @@ class SensorNode:
         self.server.stop()
 
 
+"""
+  //////////////////////
+ ////   SERVICES   ////
+//////////////////////
+"""
+
+
+class HueLampActuation(ActuationService):
+    def ros_actuation(self, payload):
+        talker = roslibpy.Topic(self.thing.client, '/lights_1', 'std_msgs/String') #TODO change topic
+        talker.publish(roslibpy.Message(payload))
+
+
+class BlindsActuation(ActuationService):
+    def ros_actuation(self, payload):
+        talker = roslibpy.Topic(self.thing.client, '/blinds_1', 'std_msgs/Int32')
+        talker.publish(roslibpy.Message(payload))
+
+
+class AlwaysTrue(AvailabilityService):
+    def check_availability(self):
+        return True
+
+    def listen_availability(self):
+        self.thing.set_property('available', True)
+
+
+"""
+  //////////////////////
+ ////   HUE LAMP   ////
+//////////////////////
+"""
+
+
+class OnAction(Action):
+    def __init__(self, thing, input_):
+        Action.__init__(self, uuid.uuid4().hex, thing, 'on', input_=input_)
+
+    def perform_action(self):
+        actuation_service = HueLampActuation(self.thing)
+        payload = {'data': json.dumps({'power': 'on'})}
+
+        actuation_service.ros_actuation(payload)
+
+        self.thing.set_property('on', True)
+        print('ToglleAction performed on ' + self.thing.name)
+
+
+class OffAction(Action):
+    def __init__(self, thing, input_):
+        Action.__init__(self, uuid.uuid4().hex, thing, 'off', input_=input_)
+
+    def perform_action(self):
+        actuation_service = HueLampActuation(self.thing)
+        payload = {'data': json.dumps({'power': 'off'})}
+        actuation_service.ros_actuation(payload)
+
+        self.thing.set_property('on', False)
+        print('ToglleAction performed on ' + self.thing.name)
+
+
+class ChangeColor(Action):
+    def __init__(self, thing, input_):
+        Action.__init__(self, uuid.uuid4().hex, thing, 'color', input_=input_)
+
+    def perform_action(self):
+        actuation_service = HueLampActuation(self.thing)
+        color = self.input['color']
+
+        payload = {'data': json.dumps({'color': color})}
+        actuation_service.ros_actuation(payload)
+
+        self.thing.set_property('color', color)
+
+
+def make_hue_light(client):
+    thing_type = ['OnOffSwitch', 'Light',  'Philips HUE']
+
+    thing = ThingWrapper('hue_lamp', thing_type, client, AlwaysTrue, 'Philips HUE as web thing')
+
+    #TODO add 'availablie property'
+    thing.add_property(
+        Property(thing,
+                 'on',
+                 Value(False),
+                 metadata={
+                     '@type': 'OnOffProperty',
+                     'title': 'On/Off',
+                     'type': 'boolean',
+                     'description': 'Whether the lamp is turned on',
+                 }))
+    thing.add_property(
+        Property(thing,
+                 'color',
+                 Value(None),
+                 metadata={
+                     '@type': 'ColorProperty',
+                     'title': 'Color',
+                     'type': 'string',
+                     'description': 'Lamp color',
+                 }))
+
+    thing.add_available_action('color',
+                               {
+                                   'title': 'Change color',
+                                   'description': 'Change color',
+                                   'metadata': {}  # TODO add metadata: input description for 'validate'
+                               },
+                               ChangeColor)
+
+    thing.add_available_action('on',
+                               {
+                                   'title': 'Turn on',
+                                   'description': 'Turn the lamp on or off',
+                                   'metadata':{} #TODO add metadata: input description for 'validate'
+                               },
+                               OnAction)
+    thing.add_available_action('off',
+                               {
+                                   'title': 'turn off',
+                                   'description': 'Turn the lamp on or off',
+                                   'metadata': {}  # TODO add metadata: input description for 'validate'
+                               },
+                               OffAction)
+    return thing
+
+
+"""
+  //////////////////////
+ ////   BLINDS   //////
+//////////////////////
+"""
+#TODO test blinds
+
+
+class BlindsUp(Action):
+    def __init__(self, thing, input_):
+        Action.__init__(self, uuid.uuid4().hex, thing, 'up', input_=input_)
+
+    def perform_action(self):
+        actuation_service = BlindsActuation(self.thing)
+        payload = {'data': 1}
+
+        actuation_service.ros_actuation(payload)
+
+
+class BlindsDown(Action):
+    def __init__(self, thing, input_):
+        Action.__init__(self, uuid.uuid4().hex, thing, 'down', input_=input_)
+
+    def perform_action(self):
+        actuation_service = BlindsActuation(self.thing)
+        payload = {'data': -1}
+
+        actuation_service.ros_actuation(payload)
+
+
+class BlindsStop(Action):
+    def __init__(self, thing, input_):
+        Action.__init__(self, uuid.uuid4().hex, thing, 'stop', input_=input_)
+
+    def perform_action(self):
+        actuation_service = BlindsActuation(self.thing)
+        payload = {'data': 0}
+
+        actuation_service.ros_actuation(payload)
+
+
+def make_blinds1(client):
+    thing_type = ['blinds', 'light change']
+    thing = ThingWrapper('blinds_1',thing_type, client, AlwaysTrue, 'AI-MAS blinds as web thing')
+    #TODO add available property
+
+    thing.add_available_action('up',
+                               {
+                                   'title': 'BlindsUp',
+                                   'description': 'Start to rise the blinds',
+                                   'metadata':{}
+                               },
+                               BlindsUp)
+
+    thing.add_available_action('down',
+                               {
+                                   'title': 'BlindsDown',
+                                   'description': 'Start to lower the blinds',
+                                   'metadata':{}
+                               },
+                               BlindsDown)
+
+    thing.add_available_action('stop',
+                               {
+                                   'title': 'BlindsStop',
+                                   'description': 'Stop the blinds',
+                                   'metadata':{}
+                               },
+                               BlindsDown)
+
+    return thing
+
+"""
+  //////////////////
+ ////   RUN   /////
+//////////////////
+"""
+
+
 def run_server():
-    things = []
-    client = roslibpy.Ros('localhost', 9090)
+
+    #client = roslibpy.Ros(host='192.168.0.158', port=9090)
+    client = roslibpy.Ros(host='localhost', port=9090)
+
+    hue_light = make_hue_light(client)
+    blinds1 = make_blinds1(client)
+    things = [hue_light, blinds1]
+
     server = SensorNode(MultipleThings(things, "Nume"), client, port=8888)
     try:
         logging.info('starting the server')

@@ -39,15 +39,16 @@ class PerformROSAction(Action):
 
 class ThingWrapper(webthing.Thing):
 
-    def __init__(self, name, type_, client, description=''):
+    def __init__(self, name, type_, client, availability_cls, description=''):
         super(ThingWrapper, self).__init__(name, type_, description)
         self.client = client
         self.talkers = {}
+        self.availability_service = availability_cls(self)
 
         self.add_property(
             Property(self,
                      'available',
-                     Value(False))
+                     Value(self.availability_service.check_availability()))
         )  # TODO check to inintial value using check_availability (see services)
 
         #availabilityService = AvailabilityService(self.client)
