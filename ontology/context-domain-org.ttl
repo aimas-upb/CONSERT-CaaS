@@ -1,0 +1,93 @@
+# baseURI: http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org
+# imports: http://www.w3.org/2019/td#
+
+@prefix : <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#> .
+@prefix consert-core: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix td: <https://www.w3.org/2019/wot/td#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org>
+  rdf:type owl:Ontology ;
+  owl:imports <http://www.w3.org/2019/td#> ;
+  owl:versionInfo "Created with TopBraid Composer"^^xsd:string ;
+.
+:ContextDimension
+  rdf:type owl:Class ;
+  rdfs:comment "The property/ContextAssertion which defines the dimension along which ContextDomain instances are created."^^xsd:string ;
+  rdfs:label "ContextDimension"^^xsd:string ;
+  rdfs:subClassOf owl:Thing ;
+.
+:ContextDomainEntity
+  rdf:type owl:Class ;
+  rdfs:comment "The range of a ContextDimension. Defines the class of ContextEntities which denote a ContextDomain (i.e. a common context denominator for producers and consumers of the context information from the domain.)."^^xsd:string ;
+  rdfs:label "ContextDomain Entity"^^xsd:string ;
+  rdfs:subClassOf owl:Thing ;
+.
+:ContextDomainGroup
+  rdf:type owl:Class ;
+  rdfs:comment "The group of context processing agents that share the context defined by a ContextDomain."^^xsd:string ;
+  rdfs:label "ContextDomain Group"^^xsd:string ;
+  rdfs:subClassOf owl:Thing ;
+.
+:ContextManagementAgent
+  rdf:type owl:Class ;
+  rdfs:comment "The generic class for logical units that manage context information."^^xsd:string ;
+  rdfs:label "Context Management Agent"^^xsd:string ;
+  rdfs:subClassOf owl:Thing ;
+.
+:CoordinatorAgent
+  rdf:type owl:Class ;
+  rdfs:comment "The agent centralizing and coordinating access to all context information of a ContextDomain."^^xsd:string ;
+  rdfs:label "Coordinator Agent"^^xsd:string ;
+  rdfs:subClassOf :ContextManagementAgent ;
+.
+:SensorAgent
+  rdf:type owl:Class ;
+  rdfs:comment "The agent managing sensor and actuator information."^^xsd:string ;
+  rdfs:label "Sensor Agent"^^xsd:string ;
+  rdfs:subClassOf :ContextManagementAgent ;
+.
+:UserAgent
+  rdf:type owl:Class ;
+  rdfs:comment "The agent issueing queries/subscriptions and actuation requests for sensors and actuators modeled in a ContextDomain."^^xsd:string ;
+  rdfs:label "User Agent"^^xsd:string ;
+  rdfs:subClassOf :ContextManagementAgent ;
+.
+:groupMemberOf
+  rdf:type owl:ObjectProperty ;
+  rdfs:comment "Property specifying the membership of a Context Management Agent to a ContextDomainGroup."^^xsd:string ;
+  rdfs:domain :ContextManagementAgent ;
+  rdfs:label "groupMemberOf"^^xsd:string ;
+  rdfs:range :ContextDomainGroup ;
+.
+:hasDimension
+  rdf:type owl:ObjectProperty ;
+  rdfs:comment "Property relating a ContextDomainGroup and the ContextDimension it si a part of."^^xsd:string ;
+  rdfs:domain :ContextDomainGroup ;
+  rdfs:label "hasDimension"^^xsd:string ;
+  rdfs:range :ContextDimension ;
+.
+:hasNature
+  rdf:type owl:DatatypeProperty ;
+  rdfs:comment "The nature of the ContextDimension, whether spatial, activity, relational or individual."^^xsd:string ;
+  rdfs:label "hasNature"^^xsd:string ;
+  rdfs:range [
+      rdf:type rdfs:Datatype ;
+      owl:oneOf (
+          "spatial"^^xsd:string
+          "activity"^^xsd:string
+          "relational"^^xsd:string
+          "individual"^^xsd:string
+        ) ;
+    ] ;
+.
+:managesThing
+  rdf:type owl:ObjectProperty ;
+  rdfs:comment "Property specifying the actuators/things that are managed by a SensorAgent."@en ;
+  rdfs:domain :SensorAgent ;
+  rdfs:label "managesThing"@en ;
+  rdfs:range td:Thing ;
+.
