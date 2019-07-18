@@ -18,7 +18,7 @@
   rdf:type owl:Class ;
   rdfs:comment "The property/ContextAssertion which defines the dimension along which ContextDomain instances are created."^^xsd:string ;
   rdfs:label "ContextDimension"^^xsd:string ;
-  rdfs:subClassOf owl:Thing ;
+  rdfs:subClassOf rdfs:Class ;
 .
 :ContextDomainEntity
   rdf:type owl:Class ;
@@ -31,6 +31,11 @@
   rdfs:comment "The group of context processing agents that share the context defined by a ContextDomain."^^xsd:string ;
   rdfs:label "ContextDomain Group"^^xsd:string ;
   rdfs:subClassOf owl:Thing ;
+  rdfs:subClassOf [
+      rdf:type owl:Restriction ;
+      owl:hasValue :ContextDimension ;
+      owl:onProperty :hasDimension ;
+    ] ;
 .
 :ContextManagementAgent
   rdf:type owl:Class ;
@@ -83,6 +88,13 @@
           "individual"^^xsd:string
         ) ;
     ] ;
+.
+:managesContextDomain
+  rdf:type owl:ObjectProperty ;
+  rdfs:comment "Property relating the ContextDomainGroup and the ContextDomainEntity instance it is managing."^^xsd:string ;
+  rdfs:domain :ContextDomainGroup ;
+  rdfs:label "managesContextDomain"^^xsd:string ;
+  rdfs:range :ContextDomainEntity ;
 .
 :managesThing
   rdf:type owl:ObjectProperty ;
