@@ -1,0 +1,92 @@
+# baseURI: http://example.org/consert-caas/lab308-demo
+# imports: http://pervasive.semanticweb.org/ont/2017/07/consert/core
+# imports: http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org
+
+@prefix : <http://example.org/consert-caas/lab308-demo#> .
+@prefix consert-core: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#> .
+@prefix context-domain-org: <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/consert-caas/lab308-demo>
+  rdf:type owl:Ontology ;
+  owl:imports <http://pervasive.semanticweb.org/ont/2017/07/consert/core> ;
+  owl:imports <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org> ;
+  owl:versionInfo "Created with TopBraid Composer"^^xsd:string ;
+.
+:CoordinatorAgent_Lab308
+  rdf:type context-domain-org:CoordinatorAgent ;
+  context-domain-org:groupMemberOf :Lab308_DomainGroup ;
+  rdfs:comment "The CoordinatorAgent instance managing the context information shared within the Lab308 ContextDomain."^^xsd:string ;
+  rdfs:label "CoordinatorAgent_Lab308"^^xsd:string ;
+.
+:HumanoidRobot
+  rdf:type owl:Class ;
+  rdfs:comment "A humanoid robot :-)"^^xsd:string ;
+  rdfs:label "HumanoidRobot"^^xsd:string ;
+  rdfs:subClassOf consert-core:ContextEntity ;
+.
+:IndoorLocation
+  rdf:type owl:Class ;
+  rdfs:comment "ContextEntity defining an indoor location."^^xsd:string ;
+  rdfs:label "IndoorLocation"^^xsd:string ;
+  rdfs:subClassOf consert-core:ContextEntity ;
+.
+:Lab308
+  rdf:type :IndoorLocation ;
+  rdf:type context-domain-org:ContextDomainEntity ;
+  rdfs:comment "The AI-MAS lab in room 308 of PRECIS Building."^^xsd:string ;
+.
+:Lab308_DomainGroup
+  rdf:type context-domain-org:ContextDomainGroup ;
+  context-domain-org:hasDimension :locatedIn ;
+  rdfs:comment "The group ContextManagementAgents managing context information for the Lab308 spatial ContextDomain."^^xsd:string ;
+  rdfs:label "Lab308 ContextDomain Group"^^xsd:string ;
+.
+:Pepper
+  rdf:type :HumanoidRobot ;
+  rdfs:comment "Pepper, the humanoid robot."^^xsd:string ;
+  rdfs:label "Pepper"^^xsd:string ;
+.
+:SensorAgent_Lab308
+  rdf:type context-domain-org:SensorAgent ;
+  context-domain-org:groupMemberOf :Lab308_DomainGroup ;
+  rdfs:comment "The SensorAgent instance for actuator devices in Lab 308."^^xsd:string ;
+  rdfs:label "SensorAgent_Lab308"^^xsd:string ;
+.
+:UserAgent_Pepper
+  rdf:type context-domain-org:UserAgent ;
+  context-domain-org:groupMemberOf :Lab308_DomainGroup ;
+  rdfs:comment "The UserAgent instance representing the Pepper humanoid robot."^^xsd:string ;
+  rdfs:label "UserAgent_Pepper"^^xsd:string ;
+.
+:locatedIn
+  rdf:type context-domain-org:ContextDimension ;
+  rdf:type owl:Class ;
+  rdfs:comment "Binary ContextAssertion specyfing that an entity is located within a IndoorLocation"^^xsd:string ;
+  rdfs:label "locatedIn"^^xsd:string ;
+  owl:equivalentClass [
+      rdf:type owl:Class ;
+      owl:intersectionOf (
+          consert-core:BinaryContextAssertion
+          [
+            rdf:type owl:Restriction ;
+            owl:allValuesFrom :IndoorLocation ;
+            owl:onProperty consert-core:assertionObject ;
+          ]
+          [
+            rdf:type owl:Restriction ;
+            owl:allValuesFrom consert-core:ContextEntity ;
+            owl:onProperty consert-core:assertionSubject ;
+          ]
+        ) ;
+    ] ;
+.
+:locationStatement
+  rdf:type :locatedIn ;
+  consert-core:assertionObject :Lab308 ;
+  consert-core:assertionSubject :Pepper ;
+  rdfs:comment "A location statement of Pepper being in lab 308"^^xsd:string ;
+.
