@@ -1,0 +1,139 @@
+@prefix : <http://example.org/consert-caas/lab308#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://example.org/consert-caas/lab308> .
+
+<http://example.org/consert-caas/lab308> rdf:type owl:Ontology ;
+                                          owl:imports <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org> ,
+                                                      <http://www.w3.org/2019/td#> .
+
+#################################################################
+#    Data properties
+#################################################################
+
+###  http://example.org/consert-caas/lab308#href
+:href rdf:type owl:DatatypeProperty ;
+      rdfs:comment "'href' value of a 'Link', as needed in ThingDescription information model" .
+
+
+###  http://example.org/consert-caas/lab308#rel
+:rel rdf:type owl:DatatypeProperty ;
+     rdfs:comment "'rel' value of a 'Link', as needed in ThingDescription information model" .
+
+
+###  http://example.org/consert-caas/lab308#type
+:type rdf:type owl:DatatypeProperty ;
+      rdfs:comment "PropertyAffordance data_type" .
+
+
+#################################################################
+#    Individuals
+#################################################################
+
+###  http://example.org/consert-caas/lab308#Blinds_1
+:Blinds_1 rdf:type owl:NamedIndividual ,
+                   <https://www.w3.org/2019/wot/td#Thing> ;
+          <https://www.w3.org/2019/wot/td#hasLink> :Blinds_1_Link ;
+          <https://www.w3.org/2019/wot/td#hasPropertyAffordance> :Blinds_1_AvailableProperty .
+
+
+###  http://example.org/consert-caas/lab308#Blinds_1_AvailableProperty
+:Blinds_1_AvailableProperty rdf:type owl:NamedIndividual ;
+                            :type "boolean" ;
+                            <https://www.w3.org/2019/wot/td#title> "available" .
+
+
+###  http://example.org/consert-caas/lab308#Blinds_1_AvailableProperty_Link
+:Blinds_1_AvailableProperty_Link rdf:type owl:NamedIndividual ,
+                                          <https://www.w3.org/2019/wot/td#Link> ;
+                                 :href "/1/properties/available" ;
+                                 :rel "property" .
+
+
+###  http://example.org/consert-caas/lab308#Blinds_1_Link
+:Blinds_1_Link rdf:type owl:NamedIndividual ;
+               :href "ws://localhost:8888/1" ;
+               :rel "alternate" .
+
+
+###  http://example.org/consert-caas/lab308#Blinds_2
+:Blinds_2 rdf:type owl:NamedIndividual .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_AvailableProperty
+:HueLight_AvailableProperty rdf:type owl:NamedIndividual ;
+                            <https://www.w3.org/2019/wot/td#hasLink> :HueLight_AvailableProperty_Link ;
+                            :type "boolean" ;
+                            <https://www.w3.org/2019/wot/td#title> "available" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_AvailableProperty_Link
+:HueLight_AvailableProperty_Link rdf:type owl:NamedIndividual ,
+                                          <https://www.w3.org/2019/wot/td#Link> ;
+                                 :href "/0/properties/available" ;
+                                 :rel "property" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_ColorAction
+:HueLight_ColorAction rdf:type owl:NamedIndividual ,
+                               <https://www.w3.org/2019/wot/td#ActionAffordance> ;
+                      <https://www.w3.org/2019/wot/td#name> "Change color" ;
+                      <https://www.w3.org/2019/wot/td#title> "color" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_ColorProperty
+:HueLight_ColorProperty rdf:type owl:NamedIndividual ,
+                                 <https://www.w3.org/2019/wot/td#PropertyAffordance> ;
+                        <https://www.w3.org/2019/wot/td#hasLink> :HueLight_ColorProperty_Link ;
+                        :type "string" ;
+                        <https://www.w3.org/2019/wot/td#description> "Lamp color" ;
+                        <https://www.w3.org/2019/wot/td#name> "ColorProperty" ;
+                        <https://www.w3.org/2019/wot/td#title> "color" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_ColorProperty_Link
+:HueLight_ColorProperty_Link rdf:type owl:NamedIndividual ,
+                                      <https://www.w3.org/2019/wot/td#Link> ;
+                             :href "/0/properties/color" ;
+                             :rel "property" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_Link
+:HueLight_Link rdf:type owl:NamedIndividual ,
+                        <https://www.w3.org/2019/wot/td#Link> ;
+               :href "ws://localhost:8888/0" ;
+               :rel "alternate" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_OnProperty
+:HueLight_OnProperty rdf:type owl:NamedIndividual ,
+                              <https://www.w3.org/2019/wot/td#PropertyAffordance> ;
+                     :type "boolean" ;
+                     <https://www.w3.org/2019/wot/td#description> "Whether the lamp is turned on or off" ;
+                     <https://www.w3.org/2019/wot/td#name> "OnOffProperty" ;
+                     <https://www.w3.org/2019/wot/td#title> "on" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_OnProperty_Link
+:HueLight_OnProperty_Link rdf:type owl:NamedIndividual ,
+                                   <https://www.w3.org/2019/wot/td#Link> ;
+                          :href "/0/properties/on" ;
+                          :rel "property" .
+
+
+###  http://example.org/consert-caas/lab308#Hue_Light
+:Hue_Light rdf:type owl:NamedIndividual ,
+                    <https://www.w3.org/2019/wot/td#Thing> ;
+           <https://www.w3.org/2019/wot/td#hasLink> :HueLight_Link ;
+           <https://www.w3.org/2019/wot/td#hasPropertyAffordance> :HueLight_AvailableProperty ,
+                                                                  :HueLight_ColorProperty ,
+                                                                  :HueLight_OnProperty ;
+           <https://www.w3.org/2019/wot/td#description> "Philips HUE as web thing" ;
+           <https://www.w3.org/2019/wot/td#name> "lights_1" ;
+           rdfs:comment "Hue light in lab 308" .
+
+
+###  Generated by the OWL API (version 4.5.9.2019-02-01T07:24:44Z) https://github.com/owlcs/owlapi
