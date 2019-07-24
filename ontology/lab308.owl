@@ -6,9 +6,15 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @base <http://example.org/consert-caas/lab308> .
 
-<http://example.org/consert-caas/lab308> rdf:type owl:Ontology ;
-                                          owl:imports <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org> ,
-                                                      <http://www.w3.org/2019/td#> .
+<http://example.org/consert-caas/lab308> rdf:type owl:Ontology .
+
+#################################################################
+#    Object Properties
+#################################################################
+
+###  http://example.org/consert-caas/lab308#hasParameter
+:hasParameter rdf:type owl:ObjectProperty .
+
 
 #################################################################
 #    Data properties
@@ -30,12 +36,27 @@
 
 
 #################################################################
+#    Classes
+#################################################################
+
+###  http://example.org/consert-caas/lab308#InputSchema
+:InputSchema rdf:type owl:Class .
+
+
+###  http://example.org/consert-caas/lab308#Parameter
+:Parameter rdf:type owl:Class .
+
+
+#################################################################
 #    Individuals
 #################################################################
 
 ###  http://example.org/consert-caas/lab308#Blinds_1
 :Blinds_1 rdf:type owl:NamedIndividual ,
                    <https://www.w3.org/2019/wot/td#Thing> ;
+          <https://www.w3.org/2019/wot/td#hasActionAffordance> :Blinds_1_LowerAction ,
+                                                               :Blinds_1_RiseAction ,
+                                                               :Blinds_1_StopAction ;
           <https://www.w3.org/2019/wot/td#hasLink> :Blinds_1_Link ;
           <https://www.w3.org/2019/wot/td#hasPropertyAffordance> :Blinds_1_AvailableProperty .
 
@@ -55,57 +76,82 @@
 
 ###  http://example.org/consert-caas/lab308#Blinds_1_Link
 :Blinds_1_Link rdf:type owl:NamedIndividual ;
-               :href "ws://localhost:8888/1" ;
-               :rel "alternate" .
+               :href "ws://localhost:8888/1" .
 
 
-###  http://example.org/consert-caas/lab308#Blinds_2
-:Blinds_2 rdf:type owl:NamedIndividual .
+###  http://example.org/consert-caas/lab308#Blinds_1_LowerAction
+:Blinds_1_LowerAction rdf:type owl:NamedIndividual ,
+                               <https://www.w3.org/2019/wot/td#ActionAffordance> ;
+                      <https://www.w3.org/2019/wot/td#name> "LowerAction" ;
+                      <https://www.w3.org/2019/wot/td#title> "down" .
+
+
+###  http://example.org/consert-caas/lab308#Blinds_1_RiseAction
+:Blinds_1_RiseAction rdf:type owl:NamedIndividual ,
+                              <https://www.w3.org/2019/wot/td#ActionAffordance> ;
+                     <https://www.w3.org/2019/wot/td#name> "RiseAction" ;
+                     <https://www.w3.org/2019/wot/td#title> "up" .
+
+
+###  http://example.org/consert-caas/lab308#Blinds_1_StopAction
+:Blinds_1_StopAction rdf:type owl:NamedIndividual ,
+                              <https://www.w3.org/2019/wot/td#ActionAffordance> ;
+                     <https://www.w3.org/2019/wot/td#name> "StopAction" ;
+                     <https://www.w3.org/2019/wot/td#title> "stop" .
 
 
 ###  http://example.org/consert-caas/lab308#HueLight_AvailableProperty
 :HueLight_AvailableProperty rdf:type owl:NamedIndividual ;
-                            <https://www.w3.org/2019/wot/td#hasLink> :HueLight_AvailableProperty_Link ;
                             :type "boolean" ;
                             <https://www.w3.org/2019/wot/td#title> "available" .
-
-
-###  http://example.org/consert-caas/lab308#HueLight_AvailableProperty_Link
-:HueLight_AvailableProperty_Link rdf:type owl:NamedIndividual ,
-                                          <https://www.w3.org/2019/wot/td#Link> ;
-                                 :href "/0/properties/available" ;
-                                 :rel "property" .
 
 
 ###  http://example.org/consert-caas/lab308#HueLight_ColorAction
 :HueLight_ColorAction rdf:type owl:NamedIndividual ,
                                <https://www.w3.org/2019/wot/td#ActionAffordance> ;
+                      <https://www.w3.org/2019/wot/td#hasInputSchema> :HueLight_ColorAction_InputSchema ;
                       <https://www.w3.org/2019/wot/td#name> "Change color" ;
                       <https://www.w3.org/2019/wot/td#title> "color" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_ColorAction_InputSchema
+:HueLight_ColorAction_InputSchema rdf:type owl:NamedIndividual ;
+                                  :hasParameter :HueLight_ColorAction_InputSchema_ColorParam .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_ColorAction_InputSchema_ColorParam
+:HueLight_ColorAction_InputSchema_ColorParam rdf:type owl:NamedIndividual ;
+                                             :type "xsd:string" ;
+                                             <https://www.w3.org/2019/wot/td#name> "color" .
 
 
 ###  http://example.org/consert-caas/lab308#HueLight_ColorProperty
 :HueLight_ColorProperty rdf:type owl:NamedIndividual ,
                                  <https://www.w3.org/2019/wot/td#PropertyAffordance> ;
-                        <https://www.w3.org/2019/wot/td#hasLink> :HueLight_ColorProperty_Link ;
                         :type "string" ;
                         <https://www.w3.org/2019/wot/td#description> "Lamp color" ;
                         <https://www.w3.org/2019/wot/td#name> "ColorProperty" ;
                         <https://www.w3.org/2019/wot/td#title> "color" .
 
 
-###  http://example.org/consert-caas/lab308#HueLight_ColorProperty_Link
-:HueLight_ColorProperty_Link rdf:type owl:NamedIndividual ,
-                                      <https://www.w3.org/2019/wot/td#Link> ;
-                             :href "/0/properties/color" ;
-                             :rel "property" .
-
-
 ###  http://example.org/consert-caas/lab308#HueLight_Link
 :HueLight_Link rdf:type owl:NamedIndividual ,
                         <https://www.w3.org/2019/wot/td#Link> ;
-               :href "ws://localhost:8888/0" ;
-               :rel "alternate" .
+               :href "ws://localhost:8888/0" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_OffAction
+:HueLight_OffAction rdf:type owl:NamedIndividual ,
+                             <https://www.w3.org/2019/wot/td#ActionAffordance> ;
+                    <https://www.w3.org/2019/wot/td#name> "OffAction" ;
+                    <https://www.w3.org/2019/wot/td#title> "off" .
+
+
+###  http://example.org/consert-caas/lab308#HueLight_OnAction
+:HueLight_OnAction rdf:type owl:NamedIndividual ,
+                            <https://www.w3.org/2019/wot/td#ActionAffordance> ;
+                   <https://www.w3.org/2019/wot/td#name> "OnAction" ;
+                   <https://www.w3.org/2019/wot/td#title> "on" .
 
 
 ###  http://example.org/consert-caas/lab308#HueLight_OnProperty
@@ -117,16 +163,12 @@
                      <https://www.w3.org/2019/wot/td#title> "on" .
 
 
-###  http://example.org/consert-caas/lab308#HueLight_OnProperty_Link
-:HueLight_OnProperty_Link rdf:type owl:NamedIndividual ,
-                                   <https://www.w3.org/2019/wot/td#Link> ;
-                          :href "/0/properties/on" ;
-                          :rel "property" .
-
-
 ###  http://example.org/consert-caas/lab308#Hue_Light
 :Hue_Light rdf:type owl:NamedIndividual ,
                     <https://www.w3.org/2019/wot/td#Thing> ;
+           <https://www.w3.org/2019/wot/td#hasActionAffordance> :HueLight_ColorAction ,
+                                                                :HueLight_OffAction ,
+                                                                :HueLight_OnAction ;
            <https://www.w3.org/2019/wot/td#hasLink> :HueLight_Link ;
            <https://www.w3.org/2019/wot/td#hasPropertyAffordance> :HueLight_AvailableProperty ,
                                                                   :HueLight_ColorProperty ,
