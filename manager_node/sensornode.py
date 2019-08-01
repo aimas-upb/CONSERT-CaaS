@@ -11,7 +11,6 @@ import logging
 import json
 
 from zeroconf import ServiceInfo, Zeroconf
-
 from services import ActuationService, AvailabilityService
 from thingwrapper import ThingWrapper
 import tornado.concurrent
@@ -23,14 +22,9 @@ import tornado.websocket
 import socket
 from webthing.utils import get_addresses, get_ip
 
-href_counter = 0  #TODO find solution to remove counter
-
-#TODO add if_available service on perform_action
+href_counter = 0  # TODO find solution to remove counter
 
 class ExtendedThingsHandler(ThingsHandler):
-
-    # def __init__(self, *args, **kwargs):
-    #     super(ExtendedThingsHandler, self).__init__(*args, **kwargs)
 
     def initialize(self, things, hosts, ros_client):
         """
@@ -124,6 +118,44 @@ class ExtendedThingsHandler(ThingsHandler):
             thing)
         # TODO decode Events
 
+    def get(self):
+
+        message = json.loads(self.request.body.decode())
+        form = ""
+
+        if 'form' in message:
+            form = message['form']
+        else:
+            self.set_status(400)
+            return
+
+        self.set_header('Content-Type', 'application/json')
+        ws_href = '{}://{}'.format(
+            'wss' if self.request.protocol == 'https' else 'ws',
+            self.request.headers.get('Host', '')
+        )
+
+        if form == 'json-ld':
+            descriptions = []
+            for thing in self.things.get_things():
+                description = thing.as_thing_description()
+                description['forms'].append({
+                    'rel': 'alternate',
+                    'href': '{}{}'.format(ws_href, thing.get_href()),
+                })
+                descriptions.append(description)
+            self.write(json.dumps(descriptions))
+
+        elif form == 'ontology':
+            descriptions = ''
+            for thing in self.things.get_things():
+                description = thing.as_ontology_description()
+                descriptions += description
+            self.write(descriptions)
+
+        else:
+            self.set_status(400, 'Unknown \'{}\' form'.format(form))
+            return
 
 class SensorNode:
     def __init__(self, things, ros_client, port=80, hostname=None, ssl_options=None,
@@ -131,7 +163,6 @@ class SensorNode:
         """
             adapted webthing.server.WebThingServer things manager
                 changed ThingsHandler in 'handlers' with ExtendedThingsHandler
-                added 'href_counter' param for href assignment
         """
         self.things = things
 
@@ -141,7 +172,6 @@ class SensorNode:
         self.name = things.get_name()
         self.port = port
         self.hostname = hostname
-
 
         system_hostname = socket.gethostname().lower()
         self.hosts = [
@@ -171,7 +201,7 @@ class SensorNode:
             (
                 r'/?',
                 ExtendedThingsHandler,
-                dict(things=self.things, hosts=self.hosts, ros_client=self.ros_client), #TODO adapted for testing
+                dict(things=self.things, hosts=self.hosts, ros_client=self.ros_client),
             ),
             (
                 r'/(?P<thing_id>\d+)/?',
@@ -259,7 +289,7 @@ class SensorNode:
 
 class HueLampActuation(ActuationService):
     def ros_actuation(self, payload):
-        talker = roslibpy.Topic(self.thing.client, '/lights_1', 'std_msgs/String') #TODO change topic
+        talker = roslibpy.Topic(self.thing.client, '/lights_1', 'std_msgs/String')
         talker.publish(roslibpy.Message(payload))
 
 
@@ -267,6 +297,38 @@ class BlindsActuation(ActuationService):
     def ros_actuation(self, payload):
         talker = roslibpy.Topic(self.thing.client, '/blinds_1', 'std_msgs/Int32')
         talker.publish(roslibpy.Message(payload))
+
+
+class HueLightAvailability(AvailabilityService):
+    def check_availability(self):
+        client = self.thing.client
+
+        service = roslibpy.Service(client, '/rpi_1/lights_1/is_available', "amiro_services/IsAvailable")
+
+        request = roslibpy.ServiceRequest({})
+        result = service.call(request)
+
+        return result['is_available']
+
+    def listen_availability(self):
+        # TODO
+        raise NotImplementedError
+
+
+class Blinds1Availability(AvailabilityService):
+    def check_availability(self):
+        client = self.thing.client
+
+        service = roslibpy.Service(client, '/rpi_1/blinds_1/is_available', "amiro_services/IsAvailable")
+
+        request = roslibpy.ServiceRequest({})
+        result = service.call(request)
+
+        return result['is_available']
+
+    def listen_availability(self):
+        # TODO
+        raise NotImplementedError
 
 
 class AlwaysTrue(AvailabilityService):
@@ -326,11 +388,10 @@ class ChangeColor(Action):
 
 
 def make_hue_light(client):
-    thing_type = ['OnOffSwitch', 'Light',  'Philips HUE']
+    thing_type = 'HueLight'
+    base_uri = "file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/lab308_things_xml.owl"
+    thing = ThingWrapper('hue_lamp', thing_type, base_uri, client, AlwaysTrue, 'Philips HUE as web thing')    # TODO change AlwaysTrue with HueLightAvailability
 
-    thing = ThingWrapper('hue_lamp', thing_type, client, AlwaysTrue, 'Philips HUE as web thing')
-
-    #TODO add 'availablie property'
     thing.add_property(
         Property(thing,
                  'on',
@@ -356,7 +417,11 @@ def make_hue_light(client):
                                {
                                    'title': 'Change color',
                                    'description': 'Change color',
-                                   'metadata': {}  # TODO add metadata: input description for 'validate'
+                                   'metadata': {
+                                       'input':{
+                                           'color' : 'xsd:string'
+                                       }
+                                   }
                                },
                                ChangeColor)
 
@@ -364,14 +429,14 @@ def make_hue_light(client):
                                {
                                    'title': 'Turn on',
                                    'description': 'Turn the lamp on or off',
-                                   'metadata':{} #TODO add metadata: input description for 'validate'
+                                   'metadata':{}
                                },
                                OnAction)
     thing.add_available_action('off',
                                {
                                    'title': 'turn off',
                                    'description': 'Turn the lamp on or off',
-                                   'metadata': {}  # TODO add metadata: input description for 'validate'
+                                   'metadata': {}
                                },
                                OffAction)
     return thing
@@ -382,7 +447,6 @@ def make_hue_light(client):
  ////   BLINDS   //////
 //////////////////////
 """
-#TODO test blinds
 
 
 class BlindsUp(Action):
@@ -419,9 +483,10 @@ class BlindsStop(Action):
 
 
 def make_blinds1(client):
-    thing_type = ['blinds', 'light change']
-    thing = ThingWrapper('blinds_1',thing_type, client, AlwaysTrue, 'AI-MAS blinds as web thing')
-    #TODO add available property
+    thing_type = 'Blinds'
+    base_uri = "file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/lab308_things_xml.owl"
+
+    thing = ThingWrapper('blinds_1',thing_type, base_uri, client, AlwaysTrue, 'AI-MAS blinds as web thing')
 
     thing.add_available_action('up',
                                {
@@ -458,8 +523,8 @@ def make_blinds1(client):
 
 def run_server():
 
-    #client = roslibpy.Ros(host='192.168.0.158', port=9090)
-    client = roslibpy.Ros(host='localhost', port=9090)
+    # client = roslibpy.Ros(host='192.168.0.158', port=9090) # Lab ROS
+    client = roslibpy.Ros(host='localhost', port=9090)  # Testing
 
     hue_light = make_hue_light(client)
     blinds1 = make_blinds1(client)
