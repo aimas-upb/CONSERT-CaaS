@@ -6,6 +6,7 @@ from jsonschema.exceptions import ValidationError
 
 from services import AvailabilityService, ActuationService
 import owlready2
+import rdflib
 
 import roslibpy
 import webthing
@@ -27,11 +28,12 @@ class PerformROSAction(Action):
 
 class ThingWrapper(webthing.Thing):
     def __init__(self, name, type_, base_uri, client, availability_cls, description=''):
-        super(ThingWrapper, self).__init__(name, name, type_, description)
+        super(ThingWrapper, self).__init__(name, title=name, type_=type_, description=description)
         self.type = type_
         self.client = client
         self.base_uri = base_uri
         self.talkers = {}
+
         self.availability_service = availability_cls(self)
         self.add_property(Property(self, 'available', Value(self.availability_service.check_availability())))
 
@@ -107,42 +109,141 @@ class ThingWrapper(webthing.Thing):
 
         return thing
 
-    def as_ontology_description(self):
-        print(self.title)  # testing
+    def as_ontology_description(self, sensor_agent_name):
+        ontology = self.ontology_description(sensor_agent_name)
+        return ontology
 
+    def ontology_description(self, sensor_agent_name = None):
         td = owlready2.get_ontology("file:///home/costin/Desktop/ontology/td.owl").load()
+        context_domain_org = owlready2.get_ontology(
+            "file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/context-domain-org.owl").load()
         ontology = owlready2.get_ontology(self.base_uri).load()
 
-        object_class = ontology.__getitem__(self.type)
-        thing = object_class(self.title)
-        thing.title= self.title
+        thing_iri = 'http://localhost:8888' + self.href_prefix  # TODO hardcoded , change at deploy
 
-        thing_properties = self.get_property_descriptions()
-        properties = []
-        for property in thing_properties:
-            property_affordance = td.PropertyAffordance(self.title + "_" + property + "_property")
-            properties.append(property_affordance)
+        if ontology.world.get(iri = thing_iri) is None :
+            object_class = ontology.__getitem__(self.type)
+            thing = object_class(iri = thing_iri)
+            thing.is_a.append(td.Thing)
+            thing.title.append(self.title)
 
-        thing_actions = self.available_actions.items()
-        actions = []
-        for name, action in thing_actions:
-            input_schemas = []
-            if action['metadata']['metadata']:
-                for input_param_name in action['metadata']['metadata']['input']:
-                    input_schema = ontology.InputSchema(self.title + "_" + name + "_action_inputSchema")
-                    input_schema.title = input_param_name
-                    input_schema.type.append(action['metadata']['metadata']['input'][input_param_name])
+            # thing.iri = thing_iri
 
-                    input_schemas.append(input_schema)
-            action_affordance = td.ActionAffordance(self.title + "_" + name + "_action_")
-            action_affordance.hasInputSchema = input_schemas
-            actions.append(action_affordance)
+            thing_properties = self.get_property_descriptions()
+            properties = []
+            for property in thing_properties:
+                # property_affordance = td.PropertyAffordance(self.title + "_" + property + "_property")
+                property_affordance = td.PropertyAffordance(iri= '{}/properties/{}'.format(thing.iri, property))
+                properties.append(property_affordance)
 
-        thing.hasActionAffordance = actions
-        thing.hasPropertyAffordance = properties
+            thing_actions = self.available_actions.items()
+            actions = []
+            for name, action in thing_actions:
+                input_schemas = []
+                if action['metadata']['metadata']:
+                    for input_param_name in action['metadata']['metadata']['input']:
+                        input_schema = ontology.InputSchema(self.title + "_" + name + "_action_inputSchema")
+                        input_schema.title = input_param_name
+                        input_schema.type.append(action['metadata']['metadata']['input'][input_param_name])
 
-        graph = ontology.world.as_rdflib_graph()
-        return graph.serialize(format="turtle", indent=4).decode("ascii")
+                        input_schemas.append(input_schema)
+
+                action_affordance = td.ActionAffordance(iri = '{}/actions/{}'.format(thing.iri, name))
+                action_affordance.hasInputSchema = input_schemas
+                # action_affordance.iri = '{}/actions/{}'.format(thing.iri, name)
+                actions.append(action_affordance)
+
+            thing.hasActionAffordance = actions
+            thing.hasPropertyAffordance = properties
+
+            if ontology.world.get(iri = 'http://localhost:8888') is None :
+                sensor_agent = context_domain_org.SensorAgent(iri = 'http://localhost:8888')    # TODO hardcoded
+            else:
+                sensor_agent = ontology.world.get(iri = 'http://localhost:8888')
+            sensor_agent.managesThing.append(thing)
+
+            graph = ontology.world.as_rdflib_graph()
+
+            uri = rdflib.URIRef(ontology.base_iri + self.type)
+            ontology_str = ''
+
+            query = " CONSTRUCT { ?sensorAgent <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#managesThing> ?thing . } WHERE { ?sensorAgent <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#managesThing> ?thing . } "
+            r = list(graph.query(query))
+            for triple in r:
+                triple_str = ''
+                for triple_element in triple:
+                    if (str(triple_element).startswith('http')):
+                        triple_str += '<' + str(triple_element) + '> '
+                    else:
+                        triple_str += '"' + str(triple_element) + '" '
+                # print(self.title + ' ' + triple_str)
+                ontology_str += triple_str + '.\n'
+
+            query = " CONSTRUCT {{ ?name ?hasProperty ?Property}} WHERE {{ ?name ?hasProperty ?Property . ?name a <{}> }} ".format(
+                uri, uri, uri, uri, uri)
+            r = list(graph.query(query))
+            for triple in r:
+                triple_str = ''
+                for triple_element in triple:
+                    if(str(triple_element).startswith('http')):
+                        triple_str += '<' + str(triple_element) + '> '
+                    else: triple_str += '"' + str(triple_element) + '" '
+                ontology_str += triple_str + '.\n'
+
+            query = " CONSTRUCT {{ ?property ?hasData ?data . }} WHERE {{ ?property ?hasData ?data . ?name ?p ?property . ?name a <{}> . }} ".format(uri)
+            r = list(graph.query(query))
+            for triple in r:
+                triple_str = ''
+                for triple_element in triple:
+                    if (str(triple_element).startswith('http')):
+                        triple_str += '<' + str(triple_element) + '> '
+                    else:
+                        triple_str += '"' + str(triple_element) + '" '
+                ontology_str += triple_str + '.\n'
+
+            query = " CONSTRUCT {{ ?data ?p ?o }} WHERE {{ ?data ?p ?o . ?property ?hasData ?data . ?name ?hasProperty ?property . ?name a <{}> . }} ".format(
+                uri)
+            r = list(graph.query(query))
+            for triple in r:
+                triple_str = ''
+                for triple_element in triple:
+                    if (str(triple_element).startswith('http')):
+                        triple_str += '<' + str(triple_element) + '> '
+                    else:
+                        triple_str += '"' + str(triple_element) + '" '
+                ontology_str += triple_str + '.\n'
+
+            # return graph.serialize(format="turtle", indent=4).decode("ascii")
+            return ontology_str
+        else:
+            graph = ontology.world.as_rdflib_graph()
+            thing_url = rdflib.URIRef(thing_iri)
+
+            ontology_str = ''
+
+            query = " CONSTRUCT {{ <{}> ?hasProperty ?property . }} WHERE {{ <{}> ?hasProperty ?property . }} ".format(thing_url, thing_url)
+            r = list(graph.query(query))
+            for triple in r:
+                triple_str = ''
+                for triple_element in triple:
+                    if str(triple_element).startswith('http'):
+                        triple_str += '<' + str(triple_element) + '> '
+                    else:
+                        triple_str += '"' + str(triple_element) + '" '
+                ontology_str += triple_str + '.\n'
+
+            query = " CONSTRUCT {{ ?property ?hasData ?data . }} WHERE {{ <{}> ?hasProperty ?property . ?property ?hasData ?data . }} ".format(
+                thing_url)
+            r = list(graph.query(query))
+            for triple in r:
+                triple_str = ''
+                for triple_element in triple:
+                    if str(triple_element).startswith('http'):
+                        triple_str += '<' + str(triple_element) + '> '
+                    else:
+                        triple_str += '"' + str(triple_element) + '" '
+                ontology_str += triple_str + '.\n'
+            return ontology_str
 
     def set_availability(self, state):
         self.set_property('available', state)

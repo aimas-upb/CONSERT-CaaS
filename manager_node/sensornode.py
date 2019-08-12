@@ -1,7 +1,12 @@
 from __future__ import division
 
+import time
 import uuid
 
+import threading
+
+import rdflib
+import requests
 import roslibpy
 from webthing.server import ActionsHandler, ThingsHandler, ThingHandler, PropertiesHandler, PropertyHandler, \
     ActionHandler, ActionIDHandler, EventsHandler, EventHandler
@@ -23,6 +28,7 @@ import socket
 from webthing.utils import get_addresses, get_ip
 
 href_counter = 0  # TODO find solution to remove counter
+
 
 class ExtendedThingsHandler(ThingsHandler):
 
@@ -119,23 +125,20 @@ class ExtendedThingsHandler(ThingsHandler):
         # TODO decode Events
 
     def get(self):
-
-        message = json.loads(self.request.body.decode())
-        form = ""
-
-        if 'form' in message:
-            form = message['form']
-        else:
-            self.set_status(400)
+        if 'format' not in self.request.arguments:
+            self.set_status(400, 'Missing format url param')
             return
 
+        format = self.request.arguments['format'][0].decode('ascii')
+
+        # TODO change to match ontology support
         self.set_header('Content-Type', 'application/json')
         ws_href = '{}://{}'.format(
             'wss' if self.request.protocol == 'https' else 'ws',
             self.request.headers.get('Host', '')
         )
 
-        if form == 'json-ld':
+        if format == 'json-ld':
             descriptions = []
             for thing in self.things.get_things():
                 description = thing.as_thing_description()
@@ -146,24 +149,165 @@ class ExtendedThingsHandler(ThingsHandler):
                 descriptions.append(description)
             self.write(json.dumps(descriptions))
 
-        elif form == 'ontology':
+        elif format == 'ontology':
             descriptions = ''
             for thing in self.things.get_things():
-                description = thing.as_ontology_description()
+                description = thing.as_ontology_description('lab308_SensorAgent')   # TODO hardcoded
                 descriptions += description
             self.write(descriptions)
 
         else:
-            self.set_status(400, 'Unknown \'{}\' form'.format(form))
+            self.set_status(400, 'Unknown \'{}\' format'.format(format))
             return
 
+
+class ExtendedThingHandler(ThingHandler):
+
+    @tornado.gen.coroutine
+    def get(self, thing_id='0'):
+
+        if 'format' not in self.request.arguments:
+            self.set_status(400, 'Missing format url param')
+            return
+
+        # TODO change to match ontology support
+        self.thing = self.get_thing(thing_id)
+        if self.thing is None:
+            self.set_status(404)
+            self.finish()
+            return
+
+        if self.request.headers.get('Upgrade', '').lower() == 'websocket':
+            yield tornado.websocket.WebSocketHandler.get(self)
+            return
+
+        self.set_header('Content-Type', 'application/json')
+        ws_href = '{}://{}'.format(
+            'wss' if self.request.protocol == 'https' else 'ws',
+            self.request.headers.get('Host', '')
+        )
+
+        format = self.request.arguments['format'][0].decode('ascii')
+        description = ''
+        if format == 'json-ld':
+            description = self.thing.as_thing_description()
+            description['forms'].append({
+                'rel': 'alternate',
+                'href': '{}{}'.format(ws_href, self.thing.get_href()),
+            })
+            description['base'] = '{}://{}{}'.format(
+                self.request.protocol,
+                self.request.headers.get('Host', ''),
+                self.thing.get_href()
+            )
+            description['securityDefinitions'] = {
+                'nosec_sc': {
+                    'scheme': 'nosec',
+                },
+            }
+            description['security'] = 'nosec_sc'
+
+            self.write(json.dumps(description))
+
+        elif format == 'ontology':
+            description = self.thing.as_ontology_description('lab308_SensorAgent')
+            self.write(description)
+        else:
+            self.set_status(400, 'Unknown \'{}\' format'.format(format))
+            return
+        self.finish()
+
+
+class ExtendedPropertiesHandler(PropertiesHandler):
+
+    def get(self, thing_id='0'):
+
+        if 'format' not in self.request.arguments:
+            self.set_status(400, 'Missing format url param')
+            return
+
+        format = self.request.arguments['format'][0].decode('ascii')
+
+        if format == 'json-ld':
+            thing = self.get_thing(thing_id)
+            if thing is None:
+                self.set_status(404)
+                return
+
+            self.set_header('Content-Type', 'application/json')
+            self.write(json.dumps(thing.get_properties()))
+        elif format == 'ontology':
+            description = ''
+
+            thing = self.get_thing(thing_id)
+            if thing is None:
+                self.set_status(404)
+                return
+
+            graph = rdflib.Graph()
+            rdf = rdflib.namespace.RDF
+
+            bnode = rdflib.BNode()
+            graph.add((bnode, rdf.type, rdf.Seq))
+
+            property_dict = thing.get_properties()
+            for property_name in property_dict.keys():
+                property_url = rdflib.URIRef('http://localhost:8888/{}/properties/{}'.format(thing_id, property_name))
+                graph.add((bnode, rdf.li, property_url))
+                value = rdflib.Literal(property_dict[property_name])
+                graph.add( (property_url, rdf.value, value) )
+
+            self.write(graph.serialize(format='nt'))
+        else:
+            self.set_status(400, 'Unknown \'{}\' format'.format(format))
+            return
+
+
+class ExtendedPropertyHandler(PropertyHandler):
+    def get(self, thing_id='0', property_name=None):
+
+        if 'format' not in self.request.arguments:
+            self.set_status(400, 'Missing format url param')
+            return
+
+        format = self.request.arguments['format'][0].decode('ascii')
+        thing = self.get_thing(thing_id)
+
+        if format == 'json-ld':
+            if thing is None:
+                self.set_status(404)
+                return
+
+            if thing.has_property(property_name):
+                self.set_header('Content-Type', 'application/json')
+                self.write(json.dumps({
+                    property_name: thing.get_property(property_name),
+                }))
+            else:
+                self.set_status(404)
+        elif format == 'ontology':
+            graph = rdflib.Graph()
+            rdf = rdflib.namespace.RDF
+
+            property_url = rdflib.URIRef('http://localhost:8888/{}/properties/{}'.format(thing_id, property_name))
+            value = rdflib.Literal(thing.get_property(property_name))
+            graph.add((property_url, rdf.value, value))
+
+            self.write(graph.serialize(format='nt'))
+
+        else:
+            self.set_status(400, 'Unknown \'{}\' format'.format(format))
+            return
+
+
 class SensorNode:
-    def __init__(self, things, ros_client, port=80, hostname=None, ssl_options=None,
+    def __init__(self, name, things, ros_client, port=80, hostname=None, ssl_options=None,
                  additional_routes=None):
         """
             adapted webthing.server.WebThingServer things manager
                 changed ThingsHandler in 'handlers' with ExtendedThingsHandler
         """
+        self.name = name
         self.things = things
 
         self.ros_client = ros_client
@@ -205,18 +349,18 @@ class SensorNode:
             ),
             (
                 r'/(?P<thing_id>\d+)/?',
-                ThingHandler,
+                ExtendedThingHandler,
                 dict(things=self.things, hosts=self.hosts),
             ),
             (
                 r'/(?P<thing_id>\d+)/properties/?',
-                PropertiesHandler,
+                ExtendedPropertiesHandler,
                 dict(things=self.things, hosts=self.hosts),
             ),
             (
                 r'/(?P<thing_id>\d+)/properties/' +
                 r'(?P<property_name>[^/]+)/?',
-                PropertyHandler,
+                ExtendedPropertyHandler,
                 dict(things=self.things, hosts=self.hosts),
             ),
             (
@@ -429,7 +573,7 @@ def make_hue_light(client):
                                {
                                    'title': 'Turn on',
                                    'description': 'Turn the lamp on or off',
-                                   'metadata':{}
+                                   'metadata': {}
                                },
                                OnAction)
     thing.add_available_action('off',
@@ -530,7 +674,7 @@ def run_server():
     blinds1 = make_blinds1(client)
     things = [hue_light, blinds1]
 
-    server = SensorNode(MultipleThings(things, "Nume"), client, port=8888)
+    server = SensorNode('lab308_SensorNode', MultipleThings(things, "Nume"), client, port=8888)
     try:
         logging.info('starting the server')
         server.start()
@@ -540,9 +684,33 @@ def run_server():
         logging.info('done')
 
 
+def join_at_manager(sensornode_name):
+    time.sleep(2)
+
+    get_store_request = requests.get('http://localhost:8888?format=ontology')
+    triple_store = get_store_request.content.decode('ascii')
+
+    join_request = requests.post('http://localhost:7777/coord/location/lab308/join', data = triple_store, params = {'SensorAgent' : sensornode_name})
+
+
 if __name__ == '__main__':
     logging.basicConfig(
-        level=10,
+        level=20,
         format="%(asctime)s %(filename)s:%(lineno)s %(levelname)s %(message)s"
     )
+
+    sensornode_name = 'lab308_SensorNode'   # TODO hardcoded
+    server_thread = threading.Thread(target=join_at_manager, args=(sensornode_name, ))
+    server_thread.start()
+
     run_server()
+
+    """
+    server_thread = threading.Thread(target=run_server)
+    server_thread.start()
+
+    time.sleep(2)  # time for run_server() to get the server running
+
+    r = requests.get('http://localhost:8888?format=ontology')
+    print(r.request.body.decode('ascii'))
+    """
