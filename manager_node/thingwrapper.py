@@ -109,17 +109,17 @@ class ThingWrapper(webthing.Thing):
 
         return thing
 
-    def as_ontology_description(self, sensor_agent_name):
-        ontology = self.ontology_description(sensor_agent_name)
+    def as_ontology_description(self):
+        ontology = self.ontology_description()
         return ontology
 
-    def ontology_description(self, sensor_agent_name = None):
+    def ontology_description(self):
         td = owlready2.get_ontology("file:///home/costin/Desktop/ontology/td.owl").load()
         context_domain_org = owlready2.get_ontology(
             "file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/context-domain-org.owl").load()
         ontology = owlready2.get_ontology(self.base_uri).load()
 
-        thing_iri = 'http://localhost:8888' + self.href_prefix  # TODO hardcoded , change at deploy
+        thing_iri = 'http://localhost:8888' + self.href_prefix  # TODO hardcoded
 
         if ontology.world.get(iri = thing_iri) is None :
             object_class = ontology.__getitem__(self.type)

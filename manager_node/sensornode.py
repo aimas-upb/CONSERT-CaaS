@@ -8,6 +8,7 @@ import threading
 import rdflib
 import requests
 import roslibpy
+import yaml
 from webthing.server import ActionsHandler, ThingsHandler, ThingHandler, PropertiesHandler, PropertyHandler, \
     ActionHandler, ActionIDHandler, EventsHandler, EventHandler
 from webthing import (Property, MultipleThings, Thing, Value, Action)
@@ -28,6 +29,9 @@ import socket
 from webthing.utils import get_addresses, get_ip
 
 href_counter = 0  # TODO find solution to remove counter
+
+stream = open('sensornode_config.yaml')
+config = yaml.load(stream)
 
 
 class ExtendedThingsHandler(ThingsHandler):
@@ -125,96 +129,82 @@ class ExtendedThingsHandler(ThingsHandler):
         # TODO decode Events
 
     def get(self):
-        if 'format' not in self.request.arguments:
-            self.set_status(400, 'Missing format url param')
-            return
+        if 'format' in self.request.arguments:
+            format = self.request.arguments['format'][0].decode('ascii')
 
-        format = self.request.arguments['format'][0].decode('ascii')
+            # TODO change to match ontology support
+            self.set_header('Content-Type', 'application/json')
+            ws_href = '{}://{}'.format(
+                'wss' if self.request.protocol == 'https' else 'ws',
+                self.request.headers.get('Host', '')
+            )
 
-        # TODO change to match ontology support
-        self.set_header('Content-Type', 'application/json')
-        ws_href = '{}://{}'.format(
-            'wss' if self.request.protocol == 'https' else 'ws',
-            self.request.headers.get('Host', '')
-        )
-
-        if format == 'json-ld':
-            descriptions = []
-            for thing in self.things.get_things():
-                description = thing.as_thing_description()
-                description['forms'].append({
-                    'rel': 'alternate',
-                    'href': '{}{}'.format(ws_href, thing.get_href()),
-                })
-                descriptions.append(description)
-            self.write(json.dumps(descriptions))
-
-        elif format == 'ontology':
-            descriptions = ''
-            for thing in self.things.get_things():
-                description = thing.as_ontology_description('lab308_SensorAgent')   # TODO hardcoded
-                descriptions += description
-            self.write(descriptions)
+            if format == 'json-ld':
+                descriptions = []
+                for thing in self.things.get_things():
+                    description = thing.as_thing_description()
+                    description['forms'].append({
+                        'rel': 'alternate',
+                        'href': '{}{}'.format(ws_href, thing.get_href()),
+                    })
+                    descriptions.append(description)
+                self.write(json.dumps(descriptions))
 
         else:
-            self.set_status(400, 'Unknown \'{}\' format'.format(format))
-            return
+            descriptions = ''
+            for thing in self.things.get_things():
+                description = thing.as_ontology_description()
+                descriptions += description
+            self.write(descriptions)
 
 
 class ExtendedThingHandler(ThingHandler):
 
     @tornado.gen.coroutine
     def get(self, thing_id='0'):
+        thing = self.get_thing(thing_id)
+        if 'format' in self.request.arguments:
+            # TODO change to match ontology support
+            if thing is None:
+                self.set_status(404)
+                self.finish()
+                return
 
-        if 'format' not in self.request.arguments:
-            self.set_status(400, 'Missing format url param')
-            return
+            if self.request.headers.get('Upgrade', '').lower() == 'websocket':
+                yield tornado.websocket.WebSocketHandler.get(self)
+                return
 
-        # TODO change to match ontology support
-        self.thing = self.get_thing(thing_id)
-        if self.thing is None:
-            self.set_status(404)
-            self.finish()
-            return
-
-        if self.request.headers.get('Upgrade', '').lower() == 'websocket':
-            yield tornado.websocket.WebSocketHandler.get(self)
-            return
-
-        self.set_header('Content-Type', 'application/json')
-        ws_href = '{}://{}'.format(
-            'wss' if self.request.protocol == 'https' else 'ws',
-            self.request.headers.get('Host', '')
-        )
-
-        format = self.request.arguments['format'][0].decode('ascii')
-        description = ''
-        if format == 'json-ld':
-            description = self.thing.as_thing_description()
-            description['forms'].append({
-                'rel': 'alternate',
-                'href': '{}{}'.format(ws_href, self.thing.get_href()),
-            })
-            description['base'] = '{}://{}{}'.format(
-                self.request.protocol,
-                self.request.headers.get('Host', ''),
-                self.thing.get_href()
+            self.set_header('Content-Type', 'application/json')
+            ws_href = '{}://{}'.format(
+                'wss' if self.request.protocol == 'https' else 'ws',
+                self.request.headers.get('Host', '')
             )
-            description['securityDefinitions'] = {
-                'nosec_sc': {
-                    'scheme': 'nosec',
-                },
-            }
-            description['security'] = 'nosec_sc'
 
-            self.write(json.dumps(description))
+            format = self.request.arguments['format'][0].decode('ascii')
+            description = ''
+            if format == 'json-ld':
+                description = thing.as_thing_description()
+                description['forms'].append({
+                    'rel': 'alternate',
+                    'href': '{}{}'.format(ws_href, thing.get_href()),
+                })
+                description['base'] = '{}://{}{}'.format(
+                    self.request.protocol,
+                    self.request.headers.get('Host', ''),
+                    thing.get_href()
+                )
+                description['securityDefinitions'] = {
+                    'nosec_sc': {
+                        'scheme': 'nosec',
+                    },
+                }
+                description['security'] = 'nosec_sc'
 
-        elif format == 'ontology':
-            description = self.thing.as_ontology_description('lab308_SensorAgent')
-            self.write(description)
+                self.write(json.dumps(description))
+
         else:
-            self.set_status(400, 'Unknown \'{}\' format'.format(format))
-            return
+            description = thing.as_ontology_description()
+            self.write(description)
         self.finish()
 
 
@@ -222,21 +212,18 @@ class ExtendedPropertiesHandler(PropertiesHandler):
 
     def get(self, thing_id='0'):
 
-        if 'format' not in self.request.arguments:
-            self.set_status(400, 'Missing format url param')
-            return
+        if 'format' in self.request.arguments:
+            format = self.request.arguments['format'][0].decode('ascii')
 
-        format = self.request.arguments['format'][0].decode('ascii')
+            if format == 'json-ld':
+                thing = self.get_thing(thing_id)
+                if thing is None:
+                    self.set_status(404)
+                    return
 
-        if format == 'json-ld':
-            thing = self.get_thing(thing_id)
-            if thing is None:
-                self.set_status(404)
-                return
-
-            self.set_header('Content-Type', 'application/json')
-            self.write(json.dumps(thing.get_properties()))
-        elif format == 'ontology':
+                self.set_header('Content-Type', 'application/json')
+                self.write(json.dumps(thing.get_properties()))
+        else:
             description = ''
 
             thing = self.get_thing(thing_id)
@@ -252,62 +239,51 @@ class ExtendedPropertiesHandler(PropertiesHandler):
 
             property_dict = thing.get_properties()
             for property_name in property_dict.keys():
-                property_url = rdflib.URIRef('http://localhost:8888/{}/properties/{}'.format(thing_id, property_name))
+                property_url = rdflib.URIRef('http://{}:{}/{}/properties/{}'.format(config['hostname'], config['port'], thing_id, property_name))
                 graph.add((bnode, rdf.li, property_url))
                 value = rdflib.Literal(property_dict[property_name])
                 graph.add( (property_url, rdf.value, value) )
 
             self.write(graph.serialize(format='nt'))
-        else:
-            self.set_status(400, 'Unknown \'{}\' format'.format(format))
-            return
 
 
 class ExtendedPropertyHandler(PropertyHandler):
     def get(self, thing_id='0', property_name=None):
-
-        if 'format' not in self.request.arguments:
-            self.set_status(400, 'Missing format url param')
-            return
-
-        format = self.request.arguments['format'][0].decode('ascii')
         thing = self.get_thing(thing_id)
 
-        if format == 'json-ld':
-            if thing is None:
-                self.set_status(404)
-                return
+        if 'format' in self.request.arguments:
+            format = self.request.arguments['format'][0].decode('ascii')
 
-            if thing.has_property(property_name):
-                self.set_header('Content-Type', 'application/json')
-                self.write(json.dumps({
-                    property_name: thing.get_property(property_name),
-                }))
-            else:
-                self.set_status(404)
-        elif format == 'ontology':
+            if format == 'json-ld':
+                if thing is None:
+                    self.set_status(404)
+                    return
+
+                if thing.has_property(property_name):
+                    self.set_header('Content-Type', 'application/json')
+                    self.write(json.dumps({
+                        property_name: thing.get_property(property_name),
+                    }))
+                else:
+                    self.set_status(404)
+        else:
             graph = rdflib.Graph()
             rdf = rdflib.namespace.RDF
 
-            property_url = rdflib.URIRef('http://localhost:8888/{}/properties/{}'.format(thing_id, property_name))
+            property_url = rdflib.URIRef('http://localhost:8888/{}/properties/{}'.format(thing_id, property_name))  #TODO hardcoded
             value = rdflib.Literal(thing.get_property(property_name))
             graph.add((property_url, rdf.value, value))
 
             self.write(graph.serialize(format='nt'))
 
-        else:
-            self.set_status(400, 'Unknown \'{}\' format'.format(format))
-            return
-
 
 class SensorNode:
-    def __init__(self, name, things, ros_client, port=80, hostname=None, ssl_options=None,
+    def __init__(self, things, ros_client, port=80, hostname=None, ssl_options=None,
                  additional_routes=None):
         """
             adapted webthing.server.WebThingServer things manager
                 changed ThingsHandler in 'handlers' with ExtendedThingsHandler
         """
-        self.name = name
         self.things = things
 
         self.ros_client = ros_client
@@ -447,7 +423,7 @@ class HueLightAvailability(AvailabilityService):
     def check_availability(self):
         client = self.thing.client
 
-        service = roslibpy.Service(client, '/rpi_1/lights_1/is_available', "amiro_services/IsAvailable")
+        service = roslibpy.Service(client, config['hue_lamp_availability_ROSservice_name'], config['hue_lamp_availability_ROSservice_type'])
 
         request = roslibpy.ServiceRequest({})
         result = service.call(request)
@@ -463,7 +439,7 @@ class Blinds1Availability(AvailabilityService):
     def check_availability(self):
         client = self.thing.client
 
-        service = roslibpy.Service(client, '/rpi_1/blinds_1/is_available', "amiro_services/IsAvailable")
+        service = roslibpy.Service(client, config['blinds1_availability_ROSservice_name'], config['blinds1_lamp_availability_ROSservice_type'])
 
         request = roslibpy.ServiceRequest({})
         result = service.call(request)
@@ -533,7 +509,7 @@ class ChangeColor(Action):
 
 def make_hue_light(client):
     thing_type = 'HueLight'
-    base_uri = "file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/lab308_things_xml.owl"
+    base_uri = config['lab308_things_ontology_path'] #TODO hardcoded
     thing = ThingWrapper('hue_lamp', thing_type, base_uri, client, AlwaysTrue, 'Philips HUE as web thing')    # TODO change AlwaysTrue with HueLightAvailability
 
     thing.add_property(
@@ -628,7 +604,7 @@ class BlindsStop(Action):
 
 def make_blinds1(client):
     thing_type = 'Blinds'
-    base_uri = "file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/lab308_things_xml.owl"
+    base_uri = config['lab308_things_ontology_path'] #TODO hardcoded
 
     thing = ThingWrapper('blinds_1',thing_type, base_uri, client, AlwaysTrue, 'AI-MAS blinds as web thing')
 
@@ -668,13 +644,13 @@ def make_blinds1(client):
 def run_server():
 
     # client = roslibpy.Ros(host='192.168.0.158', port=9090) # Lab ROS
-    client = roslibpy.Ros(host='localhost', port=9090)  # Testing
+    client = roslibpy.Ros(host=config['ros_host'], port=config['ros_port'])
 
     hue_light = make_hue_light(client)
     blinds1 = make_blinds1(client)
     things = [hue_light, blinds1]
 
-    server = SensorNode('lab308_SensorNode', MultipleThings(things, "Nume"), client, port=8888)
+    server = SensorNode(MultipleThings(things, config['things_container_name']), ros_client= client, port=config['port'], hostname=config['hostname'])
     try:
         logging.info('starting the server')
         server.start()
@@ -684,33 +660,22 @@ def run_server():
         logging.info('done')
 
 
-def join_at_manager(sensornode_name):
-    time.sleep(2)
+def join_at_manager():
+    time.sleep(5)
 
-    get_store_request = requests.get('http://localhost:8888?format=ontology')
+    get_store_request = requests.get('http://{}:{}'.format(config['hostname'], config['port']))
     triple_store = get_store_request.content.decode('ascii')
 
-    join_request = requests.post('http://localhost:7777/coord/location/lab308/join', data = triple_store, params = {'SensorAgent' : sensornode_name})
+    join_request = requests.post('{}/join'.format(config['manager_node_url']), data = triple_store)
 
 
 if __name__ == '__main__':
     logging.basicConfig(
         level=20,
-        format="%(asctime)s %(filename)s:%(lineno)s %(levelname)s %(message)s"
+        format="[SENSOR NODE]  %(asctime)s %(filename)s:%(lineno)s %(levelname)s %(message)s"
     )
 
-    sensornode_name = 'lab308_SensorNode'   # TODO hardcoded
-    server_thread = threading.Thread(target=join_at_manager, args=(sensornode_name, ))
+    server_thread = threading.Thread(target=join_at_manager)
     server_thread.start()
 
     run_server()
-
-    """
-    server_thread = threading.Thread(target=run_server)
-    server_thread.start()
-
-    time.sleep(2)  # time for run_server() to get the server running
-
-    r = requests.get('http://localhost:8888?format=ontology')
-    print(r.request.body.decode('ascii'))
-    """

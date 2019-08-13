@@ -11,10 +11,14 @@ import owlready2
 import tornado.web
 import tornado.ioloop
 import tornado.httpserver
+import yaml
+
+stream = open('managernode_config.yaml')
+config = yaml.load(stream)
 
 
 def start_corese_server(corese_server_path):
-    subprocess.call(['java', '-jar', '-Dlog4j.configurationFile=file:/home/costin/Desktop/AI-MAS/corese/corese-server/src/main/resources/log4j2_no_stout.xml', corese_server_path])
+    subprocess.call(['java', '-jar', '-Dlog4j.configurationFile=file:{}'.format(config['corese_Dlog4j_config_file']), corese_server_path])
     # TODO find a way to test if it launched successfully
 
 
@@ -23,7 +27,7 @@ def load_ontology(url):
 
 
 def start_corese_server_thread():
-    corese_server_path = '/home/costin/Desktop/AI-MAS/corese/corese-server/target/corese-server-4.1.1-jar-with-dependencies.jar'    #TODO hardcoded
+    corese_server_path = config['corese_server_path']
     corese_server_thread = threading.Thread(target=start_corese_server, args=(corese_server_path,))
     corese_server_thread.start()
 
@@ -43,8 +47,8 @@ class ProvidersHandler(tornado.web.RequestHandler):
         self.manager_node = manager_node
 
     def get(self):
-        corese_url = 'http://localhost:8080/sparql'  # TODO hardcoded
-        manager_node_url = '<http://localhost:7777/coord/location/lab308> '
+        corese_url = config['corese_url']
+        manager_node_url = '<http://{}:{}/coord/{}/{}> '.format(self.manager_node.host, self.manager_node.port, self.manager_node.context_dimension_type, self.manager_node.domain_name)
         group_member_of_url = '<http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#groupMemberOf> '
 
         query = ' select ?provider where {{?provider {} {}}}'.format(group_member_of_url, manager_node_url)
@@ -71,7 +75,7 @@ class ProvidersHandler(tornado.web.RequestHandler):
 
 class CapabilitiesHandler(tornado.web.RequestHandler):
     def get(self):
-        corese_url = 'http://localhost:8080/sparql'  # TODO hardcoded
+        corese_url = config['corese_url']
 
         manages_thing = '<http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#managesThing>'
         query = ' select ?thing where {{?sensorNode {} ?thing}}'.format(manages_thing)
@@ -103,21 +107,19 @@ class JoinHandler(tornado.web.RequestHandler):
     def post(self):
         new_data = self.request.body.decode(encoding='ascii')
 
-        corese_url = 'http://localhost:8080/sparql'     # TODO hardcoded
+        corese_url = config['corese_url']
 
         for line in new_data.splitlines():
             payload = {'query' : 'INSERT DATA{{ {} }}'.format(line)}
             r = requests.post(corese_url, params=payload)
 
-        sensor_node_name = self.request.arguments['SensorAgent'][0].decode('ascii')
-
-        manager_node_uri = '<http://localhost:7777/coord/location/lab308> '     # Todo hardcodeds
-        sensor_node_uri = '<http://localhost:8888> '
+        manager_node_uri = '<http://{}:{}/coord/{}/{}> '.format(self.manager_node.host, self.manager_node.port, self.manager_node.context_dimension_type, self.manager_node.domain_name)
+        sensor_node_uri = '<http://localhost:8888> '   # TODO hardcoded
         group_member_of_uri = '<http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#groupMemberOf> '
         payload = {'query' : 'INSERT DATA{{ {} {} {} }}'.format(sensor_node_uri, group_member_of_uri, manager_node_uri)}
         r = requests.post(corese_url, params=payload)
 
-        logging.info('[JOIN]New SensorAgent: ' + sensor_node_name)
+        logging.info('[JOIN]New SensorAgent')
         self.write("React to post request")
 
 
@@ -138,24 +140,22 @@ class ManagerNode:
         self.server = tornado.httpserver.HTTPServer(self.application)
 
     def as_ontology_description(self):
-        td = owlready2.get_ontology("file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/td.owl").load()
-        context_domain = owlready2.get_ontology("file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/context-domain-org.owl").load()
+        td = owlready2.get_ontology(config['td_ontology_path']).load()
+        context_domain = owlready2.get_ontology(config['contextDomain_ontology_path']).load()
 
         base = 'http://{}:{}/coord/{}/{}'.format(self.host, self.port, self.context_dimension_type, self.domain_name)
 
-        thing = td.Thing(iri = base)
-        thing.is_a.append(context_domain.ContextDomainGroup)
+        if td.world.get(iri = base) is None:
+            thing = td.Thing(iri = base)
+            thing.is_a.append(context_domain.ContextDomainGroup)
 
-        thing_context_dimension = context_domain.ContextDimension(self.domain_name)
-        thing_context_dimension.comment = ['The AI-MAS lab in room 308 of PRECIS Building'] # TODO hardcoded
-        thing.hasDimension = [thing_context_dimension]
+            thing_context_dimension = context_domain.ContextDimension(self.domain_name)
+            thing.hasDimension = [thing_context_dimension]
 
+            providers_property = td.PropertyAffordance(iri = base + '/providers')
+            capabilities_property = td.PropertyAffordance(iri = base + '/capabilities')
 
-        # base_property.baseUri.append('https://' + self.base_uri)
-        providers_property = td.PropertyAffordance(iri = base + '/providers')
-        capabilities_property = td.PropertyAffordance(iri = base + '/capabilities')
-
-        thing.hasPropertyAffordance = [thing, providers_property, capabilities_property]
+            thing.hasPropertyAffordance = [thing, providers_property, capabilities_property]
 
         graph = td.world.as_rdflib_graph()
 
@@ -177,7 +177,6 @@ class ManagerNode:
             ontology_str += triple_str + '.\n'
 
         return ontology_str
-        # return graph.serialize(format="n3", indent=4).decode("ascii")
 
     def start(self):
         self.server.listen(self.port, self.host)
@@ -190,12 +189,10 @@ class ManagerNode:
 def run_server():
     start_corese_server_thread()
     time.sleep(5)
-    load_ontology(
-        "http://localhost:8080/sparql/load --post-data='remote_path=file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/td.ttl'")
-    load_ontology(
-        "http://localhost:8080/sparql/load --post-data='remote_path=file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/lab308.ttl'")
+    # load_ontology("http://localhost:8080/sparql/load --post-data='remote_path=file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/td.ttl'")
+    # load_ontology("http://localhost:8080/sparql/load --post-data='remote_path=file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/lab308.ttl'")
 
-    manager_node = ManagerNode('lab308', 'location')
+    manager_node = ManagerNode(domain_name=config['domain_name'], context_dimension_type=config['context_dimension_type'], host=config['host'], port=config['port'])
     try:
         logging.info('starting the server')
         manager_node.start()
@@ -209,7 +206,7 @@ if __name__ == '__main__':
     logging.basicConfig(
         level=20,
         # format="%(asctime)s %(filename)s:%(lineno)s %(levelname)s %(message)s"
-        format="%(asctime)s %(levelname)s %(message)s"
+        format="[MANAGER NODE]  %(asctime)s %(levelname)s %(message)s"
     )
 
     run_server()

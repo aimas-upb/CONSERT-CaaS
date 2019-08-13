@@ -1,0 +1,17 @@
+hostname: localhost
+port: 8888
+
+ros_host: localhost
+ros_port: 9090
+
+things_container_name: lab308_Things
+
+hue_lamp_availability_ROSservice_name: /rpi_1/lights_1/is_available
+hue_lamp_availability_ROSservice_type: amiro_services/IsAvailable
+
+blinds1_availability_ROSservice_name: /rpi_1/blinds_1/is_available
+blinds1_lamp_availability_ROSservice_type: amiro_services/IsAvailable
+
+lab308_things_ontology_path: file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/lab308_things_xml.owl
+
+manager_node_url: http://localhost:7777/coord/location/lab308
