@@ -287,7 +287,10 @@ class SensorNode:
         self.things = things
 
         self.ros_client = ros_client
-        self.ros_client.run()
+        try:
+            self.ros_client.run(timeout=15)
+        except:
+            raise Exception('Failed to connect to ROS')
 
         self.name = things.get_name()
         self.port = port
@@ -646,18 +649,28 @@ def run_server():
     # client = roslibpy.Ros(host='192.168.0.158', port=9090) # Lab ROS
     client = roslibpy.Ros(host=config['ros_host'], port=config['ros_port'])
 
+
     hue_light = make_hue_light(client)
     blinds1 = make_blinds1(client)
     things = [hue_light, blinds1]
 
-    server = SensorNode(MultipleThings(things, config['things_container_name']), ros_client= client, port=config['port'], hostname=config['hostname'])
     try:
-        logging.info('starting the server')
-        server.start()
-    except KeyboardInterrupt:
-        logging.info('stopping the server')
-        server.stop()
-        logging.info('done')
+        server = SensorNode(MultipleThings(things, config['things_container_name']), ros_client= client, port=config['port'], hostname=config['hostname'])
+    except:
+        logging.warning('Failed to connect to ROS, unable to run the server')
+        return
+
+    if server.ros_client.is_connected:
+        logging.info('merge')
+    else:
+        logging.info('nu')
+    # try:
+    #     logging.info('starting the server')
+    #     server.start()
+    # except KeyboardInterrupt:
+    #     logging.info('stopping the server')
+    #     server.stop()
+    #     logging.info('done')
 
 
 def join_at_manager():
@@ -676,6 +689,6 @@ if __name__ == '__main__':
     )
 
     server_thread = threading.Thread(target=join_at_manager)
-    server_thread.start()
+    # server_thread.start()
 
     run_server()
