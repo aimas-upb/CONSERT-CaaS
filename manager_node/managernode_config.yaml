@@ -1,9 +1,12 @@
-host: localhost
+host: 192.168.0.158
 port: 7777
+
 context_dimension_type: location
 domain_name: lab308
-td_ontology_path: file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/td.owl
-contextDomain_ontology_path: file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/context-domain-org.owl
-corese_server_path: /home/costin/Desktop/AI-MAS/corese/corese-server/target/corese-server-4.1.1-jar-with-dependencies.jar
-corese_Dlog4j_config_file: /home/costin/Desktop/AI-MAS/corese/corese-server/src/main/resources/log4j2_no_stout.xml
+
+td_ontology_path: file:///home/amiro/workspace/consert/CONSERT-CaaS/ontology/td.owl
+contextDomain_ontology_path: file:///home/amiro/workspace/consert/CONSERT-CaaS/ontology/context-domain-org.owl
+corese_server_path: lib/corese-server/corese-server-4.1.1-jar-with-dependencies.jar
+corese_Dlog4j_config_file: ./lib/corese-server/log4j2_no_stout.xml
+
 corese_url: http://localhost:8080/sparql

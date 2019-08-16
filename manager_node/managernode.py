@@ -56,6 +56,7 @@ class ProvidersHandler(tornado.web.RequestHandler):
         r = requests.get(corese_url, params=payload)
 
         message = r.content.decode('ascii')
+        logging.debug("Raw context domain group providers response: " + str(message))
 
         lines = message.splitlines()
         lines.pop(0)
@@ -80,9 +81,12 @@ class CapabilitiesHandler(tornado.web.RequestHandler):
         manages_thing = '<http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#managesThing>'
         query = ' select ?thing where {{?sensorNode {} ?thing}}'.format(manages_thing)
         payload = {'query': query}
-        r = requests.get(corese_url, params=payload)
+        # r = requests.get(corese_url, params=payload)
+        r = requests.post(corese_url, data=payload)
 
         message = r.content.decode('ascii')
+        logging.debug("Raw context domain group capabilities response: " + str(message))
+
         lines = message.splitlines()
         lines.pop(0)
 
@@ -204,7 +208,7 @@ def run_server():
 
 if __name__ == '__main__':
     logging.basicConfig(
-        level=20,
+        level=  10,
         # format="%(asctime)s %(filename)s:%(lineno)s %(levelname)s %(message)s"
         format="[MANAGER NODE]  %(asctime)s %(levelname)s %(message)s"
     )
