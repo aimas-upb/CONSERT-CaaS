@@ -170,7 +170,7 @@ class ManagerNode:
         for triple in r:
             triple_str = ''
             for triple_element in triple:
-                if (str(triple_element).startswith('http')):
+                if str(triple_element).startswith('http'):
                     triple_str += '<' + str(triple_element) + '> '
                 else:
                     triple_str += '"' + str(triple_element) + '" '

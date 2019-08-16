@@ -114,9 +114,13 @@ class ThingWrapper(webthing.Thing):
         return ontology
 
     def ontology_description(self):
-        td = owlready2.get_ontology("file:///home/costin/Desktop/ontology/td.owl").load()
+        # td = owlready2.get_ontology("file:///home/costin/Desktop/ontology/td.owl").load()
+        # context_domain_org = owlready2.get_ontology("file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/context-domain-org.owl").load()
+
+        td = owlready2.get_ontology("../ontology/td.owl").load()
         context_domain_org = owlready2.get_ontology(
-            "file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/context-domain-org.owl").load()
+            "../ontology/context-domain-org.owl").load()
+
         ontology = owlready2.get_ontology(self.base_uri).load()
 
         thing_iri = 'http://localhost:8888' + self.href_prefix  # TODO hardcoded
