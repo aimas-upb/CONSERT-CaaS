@@ -287,10 +287,11 @@ class SensorNode:
         self.things = things
 
         self.ros_client = ros_client
-        try:
-            self.ros_client.run(timeout=15)
-        except:
-            raise Exception('Failed to connect to ROS')
+        if self.ros_client is not None:
+            try:
+                self.ros_client.run(timeout=15)
+            except:
+                raise Exception('Failed to connect to ROS')
 
         self.name = things.get_name()
         self.port = port
@@ -412,26 +413,34 @@ class SensorNode:
 
 class HueLampActuation(ActuationService):
     def ros_actuation(self, payload):
-        talker = roslibpy.Topic(self.thing.client, '/lights_1', 'std_msgs/String')
-        talker.publish(roslibpy.Message(payload))
+        if self.thing.client is not None:
+            talker = roslibpy.Topic(self.thing.client, '/lights_1', 'std_msgs/String')
+            talker.publish(roslibpy.Message(payload))
+        else:
+            logging.info('Hue light actuatioon without ROS has no effect\nPayload: ' + payload)
 
 
 class BlindsActuation(ActuationService):
     def ros_actuation(self, payload):
-        talker = roslibpy.Topic(self.thing.client, '/blinds_1', 'std_msgs/Int32')
-        talker.publish(roslibpy.Message(payload))
+        if self.thing.client is not None:
+            talker = roslibpy.Topic(self.thing.client, '/blinds_1', 'std_msgs/Int32')
+            talker.publish(roslibpy.Message(payload))
+        else:
+            logging.info('Hue light actuatioon without ROS has no effect\nPayload: ' + payload)
 
 
 class HueLightAvailability(AvailabilityService):
     def check_availability(self):
         client = self.thing.client
+        if client is not None:
+            service = roslibpy.Service(client, config['hue_lamp_availability_ROSservice_name'], config['hue_lamp_availability_ROSservice_type'])
 
-        service = roslibpy.Service(client, config['hue_lamp_availability_ROSservice_name'], config['hue_lamp_availability_ROSservice_type'])
+            request = roslibpy.ServiceRequest({})
+            result = service.call(request)
 
-        request = roslibpy.ServiceRequest({})
-        result = service.call(request)
-
-        return result['is_available']
+            return result['is_available']
+        else:
+            return True
 
     def listen_availability(self):
         # TODO
@@ -442,12 +451,15 @@ class Blinds1Availability(AvailabilityService):
     def check_availability(self):
         client = self.thing.client
 
-        service = roslibpy.Service(client, config['blinds1_availability_ROSservice_name'], config['blinds1_lamp_availability_ROSservice_type'])
+        if client is not None:
+            service = roslibpy.Service(client, config['blinds1_availability_ROSservice_name'], config['blinds1_lamp_availability_ROSservice_type'])
 
-        request = roslibpy.ServiceRequest({})
-        result = service.call(request)
+            request = roslibpy.ServiceRequest({})
+            result = service.call(request)
 
-        return result['is_available']
+            return result['is_available']
+        else:
+            return True
 
     def listen_availability(self):
         # TODO
@@ -512,7 +524,7 @@ class ChangeColor(Action):
 
 def make_hue_light(client):
     thing_type = 'HueLight'
-    base_uri = config['lab308_things_ontology_path'] #TODO hardcoded
+    base_uri = config['lab308_things_ontology_path']
     thing = ThingWrapper('hue_lamp', thing_type, base_uri, client, AlwaysTrue, 'Philips HUE as web thing')    # TODO change AlwaysTrue with HueLightAvailability
 
     thing.add_property(
@@ -607,7 +619,7 @@ class BlindsStop(Action):
 
 def make_blinds1(client):
     thing_type = 'Blinds'
-    base_uri = config['lab308_things_ontology_path'] #TODO hardcoded
+    base_uri = config['lab308_things_ontology_path']
 
     thing = ThingWrapper('blinds_1',thing_type, base_uri, client, AlwaysTrue, 'AI-MAS blinds as web thing')
 
@@ -647,8 +659,10 @@ def make_blinds1(client):
 def run_server():
 
     # client = roslibpy.Ros(host='192.168.0.158', port=9090) # Lab ROS
-    client = roslibpy.Ros(host=config['ros_host'], port=config['ros_port'])
-
+    if 'ros_host' in config and 'ros_host' in config:
+        client = roslibpy.Ros(host=config['ros_host'], port=config['ros_port'])
+    else:
+        client = None
 
     hue_light = make_hue_light(client)
     blinds1 = make_blinds1(client)
@@ -660,17 +674,13 @@ def run_server():
         logging.warning('Failed to connect to ROS, unable to run the server')
         return
 
-    if server.ros_client.is_connected:
-        logging.info('merge')
-    else:
-        logging.info('nu')
-    # try:
-    #     logging.info('starting the server')
-    #     server.start()
-    # except KeyboardInterrupt:
-    #     logging.info('stopping the server')
-    #     server.stop()
-    #     logging.info('done')
+    try:
+        logging.info('starting the server')
+        server.start()
+    except KeyboardInterrupt:
+        logging.info('stopping the server')
+        server.stop()
+        logging.info('done')
 
 
 def join_at_manager():
@@ -679,8 +689,10 @@ def join_at_manager():
     get_store_request = requests.get('http://{}:{}'.format(config['hostname'], config['port']))
     triple_store = get_store_request.content.decode('ascii')
 
-    join_request = requests.post('{}/join'.format(config['manager_node_url']), data = triple_store)
-
+    try:
+        join_request = requests.post('{}/join'.format(config['manager_node_url']), data = triple_store)
+    except:
+        logging.info('Unable to join at manager node')
 
 if __name__ == '__main__':
     logging.basicConfig(
@@ -689,6 +701,6 @@ if __name__ == '__main__':
     )
 
     server_thread = threading.Thread(target=join_at_manager)
-    # server_thread.start()
+    server_thread.start()
 
     run_server()
