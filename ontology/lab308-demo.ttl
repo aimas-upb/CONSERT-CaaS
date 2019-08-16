@@ -1,7 +1,3 @@
-# baseURI: http://example.org/consert-caas/lab308-demo
-# imports: http://pervasive.semanticweb.org/ont/2017/07/consert/core
-# imports: http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org
-
 @prefix : <http://example.org/consert-caas/lab308-demo#> .
 @prefix consert-core: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#> .
 @prefix context-domain-org: <http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#> .
@@ -9,6 +5,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@base <http://example.org/consert-caas/lab308-demo> .
 
 <http://example.org/consert-caas/lab308-demo>
   rdf:type owl:Ontology ;

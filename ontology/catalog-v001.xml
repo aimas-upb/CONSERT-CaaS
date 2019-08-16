@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<catalog prefer="public" xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+    <uri id="User Entered Import Resolution" name="http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org" uri="context-domain-org.ttl"/>
+    <uri id="Imports Wizard Entry" name="https://www.w3.org/2019/wot/td#" uri="file:/home/costin/Desktop/ontology/td.owl"/>
+    <uri id="Imports Wizard Entry" name="http://www.w3.org/2019/td#" uri="td.ttl"/>
+    <group id="Folder Repository, directory=, recursive=true, Auto-Update=true, version=2" prefer="public" xml:base="">
+        <uri id="Automatically generated entry, Timestamp=1564750544656" name="http://example.org/consert-caas/lab308_things" uri="lab308_things_xml.owl"/>
+        <uri id="Automatically generated entry, Timestamp=1564750544656" name="http://pervasive.semanticweb.org/ont/2017/06/consert/protocol" uri="consert-protocol.rdf"/>
+        <uri id="Automatically generated entry, Timestamp=1564750544656" name="http://pervasive.semanticweb.org/ont/2017/07/consert/core" uri="consert-core.rdf"/>
+        <uri id="Automatically generated entry, Timestamp=1564750544656" name="https://www.w3.org/2019/wot/td#" uri="td.owl"/>
+    </group>
+</catalog>
