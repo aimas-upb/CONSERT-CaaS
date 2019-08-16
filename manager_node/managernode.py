@@ -18,6 +18,7 @@ config = yaml.load(stream)
 
 
 def start_corese_server(corese_server_path):
+    # subprocess.call(['java', '-jar', corese_server_path])
     subprocess.call(['java', '-jar', '-Dlog4j.configurationFile=file:{}'.format(config['corese_Dlog4j_config_file']), corese_server_path])
     # TODO find a way to test if it launched successfully
 
@@ -53,7 +54,8 @@ class ProvidersHandler(tornado.web.RequestHandler):
 
         query = ' select ?provider where {{?provider {} {}}}'.format(group_member_of_url, manager_node_url)
         payload = {'query': query}
-        r = requests.get(corese_url, params=payload)
+        headers = {'Accept': 'application/sparql-results+csv'}
+        r = requests.get(corese_url, params=payload, headers=headers)
 
         message = r.content.decode('ascii')
 
@@ -80,7 +82,8 @@ class CapabilitiesHandler(tornado.web.RequestHandler):
         manages_thing = '<http://pervasive.semanticweb.org/ont/2019/07/consert/context-domain-org#managesThing>'
         query = ' select ?thing where {{?sensorNode {} ?thing}}'.format(manages_thing)
         payload = {'query': query}
-        r = requests.get(corese_url, params=payload)
+        headers = {'Accept': 'application/sparql-results+csv'}
+        r = requests.get(corese_url, params=payload, headers = headers)
 
         message = r.content.decode('ascii')
         lines = message.splitlines()
