@@ -691,8 +691,8 @@ def join_at_manager():
 
     try:
         join_request = requests.post('{}/join'.format(config['manager_node_url']), data = triple_store)
-    except:
-        logging.info('Unable to join at manager node')
+    except Exception as e:
+        logging.info('Unable to join at manager node\n Reason:' + str(e))
 
 if __name__ == '__main__':
     logging.basicConfig(
