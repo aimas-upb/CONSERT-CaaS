@@ -4,7 +4,7 @@ from webthing import Action, Value, Property
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 
-from services import AvailabilityService, ActuationService
+from services import ActuationService
 import owlready2
 import rdflib
 
@@ -35,18 +35,17 @@ class ThingWrapper(webthing.Thing):
         self.talkers = {}
 
         self.availability_service = availability_cls(self)
-        self.add_property(Property(self, 'available', Value(self.availability_service.check_availability())))
+        self.availability_service.start_listening()
+        # self.add_property(Property(self, 'available', Value(self.availability_service.check_availability())))
+        availability = self.availability_service.check_availability()
+        self.add_property(Property(self, 'available', Value(availability)))
+        self.add_available_event('Available', None)
 
     def as_thing_description(self):
-        """
-        Return the thing state as a Thing Description.
-
-        Returns the state as a dictionary.
-        """
         thing = {
             'id': self.id,
             'title': self.title,
-            '@context':{
+            '@context': {
                 'base_URI': self.base_uri
             },
             'href': self.href_prefix if self.href_prefix else '/',
@@ -114,9 +113,6 @@ class ThingWrapper(webthing.Thing):
         return ontology
 
     def ontology_description(self):
-        # td = owlready2.get_ontology("file:///home/costin/Desktop/ontology/td.owl").load()
-        # context_domain_org = owlready2.get_ontology("file:///home/costin/Desktop/AI-MAS/CONSERT-CaaS/ontology/context-domain-org.owl").load()
-
         td = owlready2.get_ontology("../ontology/td.owl").load()
         context_domain_org = owlready2.get_ontology(
             "../ontology/context-domain-org.owl").load()
@@ -125,19 +121,16 @@ class ThingWrapper(webthing.Thing):
 
         thing_iri = 'http://localhost:8888' + self.href_prefix  # TODO hardcoded
 
-        if ontology.world.get(iri = thing_iri) is None :
+        if ontology.world.get(iri=thing_iri) is None:
             object_class = ontology.__getitem__(self.type)
-            thing = object_class(iri = thing_iri)
+            thing = object_class(iri=thing_iri)
             thing.is_a.append(td.Thing)
             thing.title.append(self.title)
-
-            # thing.iri = thing_iri
 
             thing_properties = self.get_property_descriptions()
             properties = []
             for property in thing_properties:
-                # property_affordance = td.PropertyAffordance(self.title + "_" + property + "_property")
-                property_affordance = td.PropertyAffordance(iri= '{}/properties/{}'.format(thing.iri, property))
+                property_affordance = td.PropertyAffordance(iri='{}/properties/{}'.format(thing.iri, property))
                 properties.append(property_affordance)
 
             thing_actions = self.available_actions.items()
@@ -152,18 +145,25 @@ class ThingWrapper(webthing.Thing):
 
                         input_schemas.append(input_schema)
 
-                action_affordance = td.ActionAffordance(iri = '{}/actions/{}'.format(thing.iri, name))
+                action_affordance = td.ActionAffordance(iri='{}/actions/{}'.format(thing.iri, name))
                 action_affordance.hasInputSchema = input_schemas
-                # action_affordance.iri = '{}/actions/{}'.format(thing.iri, name)
                 actions.append(action_affordance)
+
+            thing_events = self.available_events
+            events = []
+            for event_name in thing_events.keys():
+                event_affordance = td.EventAffordance(iri='{}/events/{}'.format(thing.iri, event_name))
+                event_affordance.is_a.append(context_domain_org.ThingAvailableEvent)
+                events.append(event_affordance)
 
             thing.hasActionAffordance = actions
             thing.hasPropertyAffordance = properties
+            thing.hasEventAffordance = events
 
-            if ontology.world.get(iri = 'http://localhost:8888') is None :
-                sensor_agent = context_domain_org.SensorAgent(iri = 'http://localhost:8888')    # TODO hardcoded
+            if ontology.world.get(iri='http://localhost:8888') is None:
+                sensor_agent = context_domain_org.SensorAgent(iri='http://localhost:8888')  # TODO hardcoded
             else:
-                sensor_agent = ontology.world.get(iri = 'http://localhost:8888')
+                sensor_agent = ontology.world.get(iri='http://localhost:8888')
             sensor_agent.managesThing.append(thing)
 
             graph = ontology.world.as_rdflib_graph()
@@ -180,7 +180,6 @@ class ThingWrapper(webthing.Thing):
                         triple_str += '<' + str(triple_element) + '> '
                     else:
                         triple_str += '"' + str(triple_element) + '" '
-                # print(self.title + ' ' + triple_str)
                 ontology_str += triple_str + '.\n'
 
             query = " CONSTRUCT {{ ?name ?hasProperty ?Property}} WHERE {{ ?name ?hasProperty ?Property . ?name a <{}> }} ".format(
@@ -189,12 +188,14 @@ class ThingWrapper(webthing.Thing):
             for triple in r:
                 triple_str = ''
                 for triple_element in triple:
-                    if(str(triple_element).startswith('http')):
+                    if (str(triple_element).startswith('http')):
                         triple_str += '<' + str(triple_element) + '> '
-                    else: triple_str += '"' + str(triple_element) + '" '
+                    else:
+                        triple_str += '"' + str(triple_element) + '" '
                 ontology_str += triple_str + '.\n'
 
-            query = " CONSTRUCT {{ ?property ?hasData ?data . }} WHERE {{ ?property ?hasData ?data . ?name ?p ?property . ?name a <{}> . }} ".format(uri)
+            query = " CONSTRUCT {{ ?property ?hasData ?data . }} WHERE {{ ?property ?hasData ?data . ?name ?p ?property . ?name a <{}> . }} ".format(
+                uri)
             r = list(graph.query(query))
             for triple in r:
                 triple_str = ''
@@ -225,7 +226,8 @@ class ThingWrapper(webthing.Thing):
 
             ontology_str = ''
 
-            query = " CONSTRUCT {{ <{}> ?hasProperty ?property . }} WHERE {{ <{}> ?hasProperty ?property . }} ".format(thing_url, thing_url)
+            query = " CONSTRUCT {{ <{}> ?hasProperty ?property . }} WHERE {{ <{}> ?hasProperty ?property . }} ".format(
+                thing_url, thing_url)
             r = list(graph.query(query))
             for triple in r:
                 triple_str = ''
@@ -251,7 +253,6 @@ class ThingWrapper(webthing.Thing):
 
     def set_availability(self, state):
         self.set_property('available', state)
-        print("Setting " + self.name + " to".format(state))
 
     def add_available_action(self, name, metadata, cls=None):
 
