@@ -518,6 +518,17 @@ class SensorNode:
         self.zeroconf.close()
         self.server.stop()
 
+    def join_at_manager(self):
+        time.sleep(5)
+
+        get_store_request = requests.get('http://{}:{}'.format(config['hostname'], config['port']))
+        triple_store = get_store_request.content.decode('ascii')
+
+        try:
+            join_request = requests.post('{}/join'.format(config['manager_node_url']), data=triple_store)
+        except Exception as e:
+            logging.info('Unable to join at manager node\n Reason:' + str(e))
+
 
 """
   //////////////////////
@@ -879,6 +890,8 @@ def run_server():
     try:
         logging.info('starting the server')
         server.start()
+
+        server.join_at_manager()
     except KeyboardInterrupt:
         logging.info('stopping the server')
         server.stop()
