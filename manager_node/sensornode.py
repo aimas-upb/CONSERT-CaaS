@@ -1,32 +1,34 @@
 from __future__ import division
 
-import json
-import logging
-import random
-import socket
-import sys
-import threading
-import time
+import time, random
 import uuid
+
+import threading
 
 import rdflib
 import requests
 import roslibpy
+import yaml
+from webthing.server import ActionsHandler, ThingsHandler, ThingHandler, PropertiesHandler, PropertyHandler, \
+    ActionHandler, ActionIDHandler, EventsHandler, EventHandler, BaseHandler
+from webthing import (Property, MultipleThings, Thing, Value, Action, Event)
+
+import logging
+import json
+
+from zeroconf import ServiceInfo, Zeroconf
+from services import ActuationService, AvailabilityService
+from thingwrapper import ThingWrapper
 import tornado.concurrent
 import tornado.gen
 import tornado.httpserver
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
-import yaml
-from webthing import (Property, MultipleThings, Value, Action, Event)
-from webthing.server import ActionsHandler, ThingsHandler, ThingHandler, PropertiesHandler, PropertyHandler, \
-    ActionHandler, ActionIDHandler, EventsHandler, EventHandler, BaseHandler
+import socket
 from webthing.utils import get_addresses, get_ip
-from zeroconf import ServiceInfo, Zeroconf
 
-from services import ActuationService, AvailabilityService
-from thingwrapper import ThingWrapper
+href_counter = 0  # TODO find solution to remove counter
 
 stream = open('sensornode_config.yaml')
 config = yaml.load(stream)
@@ -69,7 +71,7 @@ class ExtendedThingsHandler(ThingsHandler):
         ros_client -- the Websocket-based ROSBridge client
             for communicating with underlying ROS platform
         """
-        super(ExtendedThingsHandler, self).initialize(things, hosts)
+        super(ExtendedThingsHandler,self).initialize(things, hosts)
         self.ros_client = ros_client
 
     def post(self):
@@ -141,44 +143,45 @@ class ExtendedThingsHandler(ThingsHandler):
                 thing.add_available_action(action_name, action_meta)
 
         global href_counter
-        thing.set_href_prefix('/{}'.format(len(self.things.get_things)))
+        thing.set_href_prefix('/{}'.format(href_counter))
+        href_counter = href_counter + 1
 
+        """
+        self.things -> a things container called MultipleThings object in manager_node
+        self.things.things -> things list in the MultipleThings object of manager_node
+        """
         self.things.things.append(
             thing)
         # TODO decode Events
 
     def get(self):
-        format = None
         if 'format' in self.request.arguments:
             format = self.request.arguments['format'][0].decode('ascii')
 
-        if format == 'json-ld':
+            # TODO change to match ontology support
             self.set_header('Content-Type', 'application/json')
             ws_href = '{}://{}'.format(
                 'wss' if self.request.protocol == 'https' else 'ws',
                 self.request.headers.get('Host', '')
             )
 
-            descriptions = []
-            for thing in self.things.get_things():
-                description = thing.as_thing_description()
-                description['forms'].append({
-                    'rel': 'alternate',
-                    'href': '{}{}'.format(ws_href, thing.get_href()),
-                })
-                descriptions.append(description)
-            self.write(json.dumps(descriptions))
+            if format == 'json-ld':
+                descriptions = []
+                for thing in self.things.get_things():
+                    description = thing.as_thing_description()
+                    description['forms'].append({
+                        'rel': 'alternate',
+                        'href': '{}{}'.format(ws_href, thing.get_href()),
+                    })
+                    descriptions.append(description)
+                self.write(json.dumps(descriptions))
 
-        elif format is None or format == 'ontology':
-            self.set_header('Content-Type', 'text/plain')
+        else:
             descriptions = ''
             for thing in self.things.get_things():
                 description = thing.as_ontology_description()
                 descriptions += description
             self.write(descriptions)
-        else:
-            self.set_status(400)
-            return
 
 
 class ExtendedThingHandler(ThingHandler):
@@ -186,74 +189,73 @@ class ExtendedThingHandler(ThingHandler):
     @tornado.gen.coroutine
     def get(self, thing_id='0'):
         thing = self.get_thing(thing_id)
-
-        if thing is None:
-            self.set_status(404)
-            self.finish()
-            return
-
-        format = None
         if 'format' in self.request.arguments:
-            format = self.request.arguments['format'][0].decode('ascii')
+            # TODO change to match ontology support
+            if thing is None:
+                self.set_status(404)
+                self.finish()
+                return
 
-        if format == 'json-ld':
+            if self.request.headers.get('Upgrade', '').lower() == 'websocket':
+                yield tornado.websocket.WebSocketHandler.get(self)
+                return
+
             self.set_header('Content-Type', 'application/json')
             ws_href = '{}://{}'.format(
                 'wss' if self.request.protocol == 'https' else 'ws',
                 self.request.headers.get('Host', '')
             )
-            description = thing.as_thing_description()
-            description['forms'].append({
-                'rel': 'alternate',
-                'href': '{}{}'.format(ws_href, thing.get_href()),
-            })
-            description['base'] = '{}://{}{}'.format(
-                self.request.protocol,
-                self.request.headers.get('Host', ''),
-                thing.get_href()
-            )
-            description['securityDefinitions'] = {
-                'nosec_sc': {
-                    'scheme': 'nosec',
-                },
-            }
-            description['security'] = 'nosec_sc'
 
-            self.write(json.dumps(description))
+            format = self.request.arguments['format'][0].decode('ascii')
+            description = ''
+            if format == 'json-ld':
+                description = thing.as_thing_description()
+                description['forms'].append({
+                    'rel': 'alternate',
+                    'href': '{}{}'.format(ws_href, thing.get_href()),
+                })
+                description['base'] = '{}://{}{}'.format(
+                    self.request.protocol,
+                    self.request.headers.get('Host', ''),
+                    thing.get_href()
+                )
+                description['securityDefinitions'] = {
+                    'nosec_sc': {
+                        'scheme': 'nosec',
+                    },
+                }
+                description['security'] = 'nosec_sc'
 
-        elif format is None or format == 'ontology':
-            self.set_header('Content-Type', 'text/plain')
-            description = thing.as_ontology_description()
-            self.write(description)
+                self.write(json.dumps(description))
 
         else:
-            self.set_status(400)
-            return
-        # self.finish() ??
+            description = thing.as_ontology_description()
+            self.write(description)
+        self.finish()
 
 
 class ExtendedPropertiesHandler(PropertiesHandler):
 
     def get(self, thing_id='0'):
-        thing = self.get_thing(thing_id)
-        if thing is None:
-            self.set_status(404)
-            return
 
-        format = None
         if 'format' in self.request.arguments:
             format = self.request.arguments['format'][0].decode('ascii')
 
-        if format == 'json-ld':
-            self.set_header('Content-Type', 'application/json')
-            thing = self.get_thing(thing_id)
+            if format == 'json-ld':
+                thing = self.get_thing(thing_id)
+                if thing is None:
+                    self.set_status(404)
+                    return
 
-            self.write(json.dumps(thing.get_properties()))
-
-        elif format is None or format == 'ontology':
-            self.set_header('Content-Type', 'text/plain')
-
+                self.set_header('Content-Type', 'application/json')
+                self.write(json.dumps(thing.get_properties()))
+        else:
             description = ''
+
+            thing = self.get_thing(thing_id)
+            if thing is None:
+                self.set_status(404)
+                return
 
             graph = rdflib.Graph()
             rdf = rdflib.namespace.RDF
@@ -263,22 +265,18 @@ class ExtendedPropertiesHandler(PropertiesHandler):
 
             property_dict = thing.get_properties()
             for property_name in property_dict.keys():
-                property_url = rdflib.URIRef(
-                    'http://{}:{}/{}/properties/{}'.format(config['hostname'], config['port'], thing_id, property_name))
+                property_url = rdflib.URIRef('http://{}:{}/{}/properties/{}'.format(config['hostname'], config['port'], thing_id, property_name))
                 graph.add((bnode, rdf.li, property_url))
                 value = rdflib.Literal(property_dict[property_name])
-                graph.add((property_url, rdf.value, value))
+                graph.add( (property_url, rdf.value, value) )
 
             self.write(graph.serialize(format='nt'))
-
-        else:
-            self.set_status(400)
-            return
 
 
 class ExtendedPropertyHandler(PropertyHandler):
     def get(self, thing_id='0', property_name=None):
         thing = self.get_thing(thing_id)
+
         if thing is None:
             self.set_status(404)
             return
@@ -360,7 +358,6 @@ class TestHandler(BaseHandler):
 
         print(thing.available_events['Available']['subscribers'])
 
-
 class SensorNode:
     def __init__(self, things, ros_client, port=80, hostname=None, ssl_options=None,
                  additional_routes=None):
@@ -371,6 +368,11 @@ class SensorNode:
         self.things = things
 
         self.ros_client = ros_client
+        if self.ros_client is not None:
+            try:
+                self.ros_client.run(timeout=15)
+            except:
+                raise Exception('Failed to connect to ROS')
 
         self.name = things.get_name()
         self.port = port
@@ -430,7 +432,7 @@ class SensorNode:
             ),
             (
                 r'/(?P<thing_id>\d+)/actions/(?P<action_name>[^/]+)/?',
-                ExtendedActionHandler,
+                ActionHandler,
                 dict(things=self.things, hosts=self.hosts),
             ),
             (
@@ -461,6 +463,7 @@ class SensorNode:
             ),
         ]
 
+
         if isinstance(additional_routes, list):
             handlers = additional_routes + handlers
 
@@ -473,24 +476,8 @@ class SensorNode:
         thing.thing.set_href_prefix('/{}'.format(len(self.things.get_things())))
         self.things.things.append(thing)
 
-    def join_at_manager(self, manager):
-        while not self.running:
-            pass
-        payload = ""
-        for thing in self.things.things:
-            payload = payload + thing.as_ontology_description()
-
-        query_param = {"as": "sensor_node"}
-
-        node_url = 'http://{}:{}'.format(self.hostname, self.port)
-
-        try:
-            join_request = requests.post('{}/join'.format(manager), data=payload,
-                                         params=query_param, headers={'sensor_node_id': node_url})
-        except Exception as e:
-            logging.warning('Unable to join at manager node\n Error message: ' + str(e))
-
     def start(self):
+        """Start listening for incoming connections."""
         self.service_info = ServiceInfo(
             '_webthing._tcp.local.',
             '{}._webthing._tcp.local.'.format(self.name),
@@ -512,8 +499,10 @@ class SensorNode:
         tornado.ioloop.IOLoop.current().start()
 
     def stop(self):
+        """Stop listening."""
         for thing in self.things.things:
             thing.availability_service.stop_listening()
+
         self.zeroconf.unregister_service(self.service_info)
         self.zeroconf.close()
         self.server.stop()
@@ -524,8 +513,14 @@ class SensorNode:
         get_store_request = requests.get('http://{}:{}'.format(config['hostname'], config['port']))
         triple_store = get_store_request.content.decode('ascii')
 
+
         try:
-            join_request = requests.post('{}/join'.format(config['manager_node_url']), data=triple_store)
+            query_param = {"as": "sensor_node"}
+            node_url = 'http://{}:{}'.format(self.hostname, self.port)
+            join_request = requests.post('{}/join'.format(config['manager_node_url']),
+                                         data=triple_store,
+                                         params=query_param,
+                                         headers={'sensor_node_id': node_url})
         except Exception as e:
             logging.info('Unable to join at manager node\n Reason:' + str(e))
 
@@ -543,7 +538,7 @@ class HueLampActuation(ActuationService):
             talker = roslibpy.Topic(self.thing.client, '/lights_1', 'std_msgs/String')
             talker.publish(roslibpy.Message(payload))
         else:
-            logging.info('Hue light actuation without ROS has no effect\nPayload: ' + payload)
+            logging.info('Hue light actuatioon without ROS has no effect\nPayload: ' + payload)
 
 
 class BlindsActuation(ActuationService):
@@ -552,15 +547,14 @@ class BlindsActuation(ActuationService):
             talker = roslibpy.Topic(self.thing.client, '/blinds_1', 'std_msgs/Int32')
             talker.publish(roslibpy.Message(payload))
         else:
-            logging.info('Hue light actuation without ROS has no effect\nPayload: ' + payload)
+            logging.info('Hue light actuatioon without ROS has no effect\nPayload: ' + payload)
 
 
 class HueLightAvailability(AvailabilityService):
     def check_availability(self):
         client = self.thing.client
         if client is not None:
-            service = roslibpy.Service(client, config['hue_lamp_availability_ROSservice_name'],
-                                       config['hue_lamp_availability_ROSservice_type'])
+            service = roslibpy.Service(client, config['hue_lamp_availability_ROSservice_name'], config['hue_lamp_availability_ROSservice_type'])
 
             request = roslibpy.ServiceRequest({})
             result = service.call(request)
@@ -598,8 +592,7 @@ class Blinds1Availability(AvailabilityService):
         client = self.thing.client
 
         if client is not None:
-            service = roslibpy.Service(client, config['blinds1_availability_ROSservice_name'],
-                                       config['blinds1_lamp_availability_ROSservice_type'])
+            service = roslibpy.Service(client, config['blinds1_availability_ROSservice_name'], config['blinds1_lamp_availability_ROSservice_type'])
 
             request = roslibpy.ServiceRequest({})
             result = service.call(request)
@@ -630,6 +623,14 @@ class Blinds1Availability(AvailabilityService):
 
     def stop_listening(self):
         self.listen = False
+
+
+class AlwaysTrue(AvailabilityService):
+    def check_availability(self):
+        return True
+
+    def listen_availability(self):
+        self.thing.set_property('available', True)
 
 
 class TestAvailability(AvailabilityService):
@@ -679,6 +680,7 @@ class OnAction(Action):
         actuation_service.ros_actuation(payload)
 
         self.thing.set_property('on', True)
+        print('ToglleAction performed on ' + self.thing.name)
 
 
 class OffAction(Action):
@@ -691,6 +693,7 @@ class OffAction(Action):
         actuation_service.ros_actuation(payload)
 
         self.thing.set_property('on', False)
+        print('ToglleAction performed on ' + self.thing.name)
 
 
 class ChangeColor(Action):
@@ -707,7 +710,7 @@ class ChangeColor(Action):
         self.thing.set_property('color', color)
 
 
-def make_hue_light(client, test_mode=None):
+def make_hue_light(client, test_mode = None):
     thing_type = 'HueLight'
     base_uri = config['lab308_things_ontology_path']
 
@@ -744,8 +747,8 @@ def make_hue_light(client, test_mode=None):
                                    'title': 'Change color',
                                    'description': 'Change color',
                                    'metadata': {
-                                       'input': {
-                                           'color': 'xsd:string'
+                                       'input':{
+                                           'color' : 'xsd:string'
                                        }
                                    }
                                },
@@ -765,7 +768,6 @@ def make_hue_light(client, test_mode=None):
                                    'metadata': {}
                                },
                                OffAction)
-
     return thing
 
 
@@ -824,7 +826,7 @@ def make_blinds1(client, test_mode=None):
                                {
                                    'title': 'BlindsUp',
                                    'description': 'Start to rise the blinds',
-                                   'metadata': {}
+                                   'metadata':{}
                                },
                                BlindsUp)
 
@@ -832,7 +834,7 @@ def make_blinds1(client, test_mode=None):
                                {
                                    'title': 'BlindsDown',
                                    'description': 'Start to lower the blinds',
-                                   'metadata': {}
+                                   'metadata':{}
                                },
                                BlindsDown)
 
@@ -840,12 +842,11 @@ def make_blinds1(client, test_mode=None):
                                {
                                    'title': 'BlindsStop',
                                    'description': 'Stop the blinds',
-                                   'metadata': {}
+                                   'metadata':{}
                                },
                                BlindsDown)
 
     return thing
-
 
 """
   //////////////////
@@ -855,6 +856,9 @@ def make_blinds1(client, test_mode=None):
 
 
 def run_server():
+    import sys
+
+    # client = roslibpy.Ros(host='192.168.0.158', port=9090) # Lab ROS
     if 'ros_host' in config and 'ros_host' in config:
         client = roslibpy.Ros(host=config['ros_host'], port=config['ros_port'])
         client.run()
@@ -871,21 +875,14 @@ def run_server():
     else:
         hue_light = make_hue_light(client, test_mode=False)
         blinds1 = make_blinds1(client, test_mode=False)
-
     things = [hue_light, blinds1]
 
     try:
-        server = SensorNode(MultipleThings(things, config['things_container_name']), ros_client=client,
+        server = SensorNode(MultipleThings(things, config['things_container_name']), ros_client= client,
                             port=config['port'], hostname=config['hostname'])
     except Exception as e:
         logging.warning('Failed to connect to ROS, unable to run the server' + str(e))
         return
-
-    try:
-        join_thread = threading.Thread(target=server.join_at_manager, args=[config['manager_node_url']])
-        join_thread.start()
-    except Exception as e:
-        logging.warning('Could not join at manager' + str(e))
 
     try:
         logging.info('starting the server')
